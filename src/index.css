@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+html[data-theme='light'] {
+  --bg-page: #ffffff;
+  --bg-sidebar: #f6f6f6;
+  --bg-card: #ffffff;
+  --bg-elevated: #f9fafb;
+  --border-subtle: #e5e7eb;
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
+  --verse-num: #3b82f6;
+}
+
+/* Can Read Bible (https://canread.bible/) warm light-yellow sepia theme */
+html[data-theme='sepia'] {
+  --bg-page: #f5ebd7;
+  --bg-sidebar: #ece0c8;
+  --bg-card: #faf3e3;
+  --bg-elevated: #efe4cc;
+  --border-subtle: #dccbb0;
+  --text-main: #352a22;
+  --text-muted: #6e5d4f;
+  --verse-num: #2563eb;
+}
+
+html[data-theme='dark'] {
+  --bg-page: #14161a;
+  --bg-sidebar: #1b1e24;
+  --bg-card: #1f232b;
+  --bg-elevated: #262b35;
+  --border-subtle: #2e3440;
+  --text-main: #e5e7eb;
+  --text-muted: #9ca3af;
+  --verse-num: #60a5fa;
+}
+
+body {
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.theme-sidebar {
+  background-color: var(--bg-sidebar);
+  border-color: var(--border-subtle);
+}
+
+.theme-card {
+  background-color: var(--bg-card);
+  border-color: var(--border-subtle);
+}
+
+.theme-elevated {
+  background-color: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+
+.theme-border {
+  border-color: var(--border-subtle);
+}
+
+.theme-text-muted {
+  color: var(--text-muted);
+}
+
+.verse-number {
+  color: var(--verse-num);
+  font-size: 0.75em;
+  vertical-align: super;
+  margin-right: 0.25rem;
+  font-weight: 500;
+  user-select: none;
+}
+
+/* Highlight colors for verses */
+.hl-yellow {
+  background-color: rgba(253, 224, 71, 0.45);
+  border-radius: 3px;
+}
+.hl-green {
+  background-color: rgba(134, 239, 172, 0.45);
+  border-radius: 3px;
+}
+.hl-blue {
+  background-color: rgba(147, 197, 253, 0.45);
+  border-radius: 3px;
+}
+.hl-pink {
+  background-color: rgba(249, 168, 212, 0.45);
+  border-radius: 3px;
+}
+.hl-purple {
+  background-color: rgba(216, 180, 254, 0.45);
+  border-radius: 3px;
+}
+
+html[data-theme='dark'] .hl-yellow {
+  background-color: rgba(234, 179, 8, 0.35);
+}
+html[data-theme='dark'] .hl-green {
+  background-color: rgba(34, 197, 94, 0.35);
+}
+html[data-theme='dark'] .hl-blue {
+  background-color: rgba(59, 130, 246, 0.35);
+}
+html[data-theme='dark'] .hl-pink {
+  background-color: rgba(236, 72, 153, 0.35);
+}
+html[data-theme='dark'] .hl-purple {
+  background-color: rgba(168, 85, 247, 0.35);
+}

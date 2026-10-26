@@ -1,0 +1,12 @@
+name = "dailybible"
+main = "server/worker.ts"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+ADMIN_EMAIL = "affbizm@gmail.com"
+JWT_SECRET = "dailybible-default-jwt-secret-change-in-production"

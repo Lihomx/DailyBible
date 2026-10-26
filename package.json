@@ -1,0 +1,48 @@
+{
+  "name": "daily-bible",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "data:bible": "tsx scripts/build-bible.ts",
+    "data:plan": "tsx scripts/build-plan.ts",
+    "data:pptx": "tsx scripts/build-sample-pptx.ts",
+    "data:all": "npm run data:bible && npm run data:plan && npm run data:pptx",
+    "cf:dev": "wrangler pages dev dist --d1=DB --r2=BUCKET",
+    "cf:migrate:local": "wrangler d1 execute dailybible-db --local --file=./migrations/0001_init.sql",
+    "cf:migrate:remote": "wrangler d1 execute dailybible-db --remote --file=./migrations/0001_init.sql"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.3",
+    "hono": "^4.6.14",
+    "idb-keyval": "^6.2.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.460.0",
+    "opencc-js": "^1.0.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/canvas-confetti": "^1.6.4",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1",
+    "vite-plugin-pwa": "^0.21.0",
+    "vitest": "^2.1.6",
+    "wrangler": "^3.91.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "微读圣经 · 读经助手",
+  "short_name": "读经助手",
+  "description": "新标点和合本圣经阅读、得胜读经计划、全能查经搜索、语音朗读与主日证道",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#c84031",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
