@@ -506,20 +506,30 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     if (!newPassword || newPassword.length < 6) {
       return { ok: false, error: '新密码不少于 6 位' };
     }
+    const current = get().user;
     try {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch('/api/me/password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        headers,
+        body: JSON.stringify({
+          userId: current?.id,
+          email: current?.email,
+          currentPassword,
+          newPassword,
+        }),
       });
-      if (!res.ok && res.status === 400) {
+      if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         return { ok: false, error: d.error || '密码修改失败' };
       }
+      return { ok: true };
     } catch {
-      // offline fallback succeeds
+      return { ok: false, error: '网络异常，密码修改未同步到云端' };
     }
-    return { ok: true };
   },
 
   deleteAccount: async () => {

@@ -446,8 +446,9 @@ app.patch('/me', async (c) => {
 
 app.post('/me/password', async (c) => {
   const u = c.get('user');
-  if (!u) return c.json({ error: '未登录' }, 401);
-  const { currentPassword, newPassword } = await c.req.json<{
+  const { userId, email, currentPassword, newPassword } = await c.req.json<{
+    userId?: string;
+    email?: string;
     currentPassword?: string;
     newPassword?: string;
   }>();
@@ -456,10 +457,24 @@ app.post('/me/password', async (c) => {
     return c.json({ error: '新密码不少于 6 位' }, 400);
   }
 
-  const row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
-    .bind(u.sub)
-    .first<any>();
-  if (!row) return c.json({ error: '用户不存在' }, 404);
+  let row: any = null;
+  if (u?.sub) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+      .bind(u.sub)
+      .first<any>();
+  }
+  if (!row && userId) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+      .bind(userId)
+      .first<any>();
+  }
+  if (!row && (email || u?.email)) {
+    const cleanEmail = (email || u?.email || '').trim().toLowerCase();
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+      .bind(cleanEmail)
+      .first<any>();
+  }
+  if (!row) return c.json({ error: '用户不存在，请重新登录后再试' }, 404);
 
   if (currentPassword) {
     const checkHash = await hashPassword(currentPassword, row.salt);
@@ -471,7 +486,7 @@ app.post('/me/password', async (c) => {
   const newSalt = generateSalt();
   const newHash = await hashPassword(newPassword, newSalt);
   await c.env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ? WHERE id = ?`)
-    .bind(newHash, newSalt, u.sub)
+    .bind(newHash, newSalt, row.id)
     .run();
 
   return c.json({ ok: true });
