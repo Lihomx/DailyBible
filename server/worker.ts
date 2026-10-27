@@ -1,8 +1,13 @@
+import type { ExecutionContext } from '@cloudflare/workers-types';
 import { app } from './app';
 import { Env } from './env';
 
 export default {
-  async fetch(request: Request, env: Env & { ASSETS?: { fetch: typeof fetch } }, ctx: ExecutionContext) {
+  async fetch(
+    request: Request,
+    env: Env & { ASSETS?: { fetch: typeof fetch } },
+    ctx: ExecutionContext
+  ) {
     const url = new URL(request.url);
 
     // Handle /api/* routes via Hono
@@ -17,7 +22,9 @@ export default {
         return assetRes;
       }
       // SPA fallback to index.html for client-side routes like /bible/gen.1
-      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+      return env.ASSETS.fetch(
+        new Request(new URL('/index.html', request.url), request)
+      );
     }
 
     return new Response('Not Found', { status: 404 });
