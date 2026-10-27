@@ -749,3 +749,89 @@ app.patch('/admin/users/:id', async (c) => {
   }
   return c.json({ ok: true });
 });
+
+// Audio Bible Proxy: Resolve official MP3 URL + verse-by-verse lyric timestamps for
+// - categoryId 42: 和合本100周年朗读版 (阎大卫)
+// - categoryId 2:  和合本（新旧约）磐石聆听版 (王涛峰)
+app.get('/audio/chapter', async (c) => {
+  const book = (c.req.query('book') || 'gen').trim().toUpperCase();
+  const chapter = parseInt(c.req.query('chapter') || '1', 10) || 1;
+  const preferredCat = parseInt(c.req.query('cat') || '42', 10) || 42;
+  const usfmRef = `${book}.${chapter}`;
+
+  try {
+    const listRes = await fetch(
+      `https://wd.bible/api/get/bible/audios?v=cunps&c=${encodeURIComponent(usfmRef)}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      }
+    );
+
+    if (!listRes.ok) {
+      return c.json({ error: '获取章节音频列表失败' }, 502);
+    }
+
+    const listData = (await listRes.json()) as any;
+    const rawItems: Array<{
+      fileId: string;
+      audioName: string;
+      categoryName: string;
+      categoryId: number;
+      lyric: string;
+    }> = Array.isArray(listData?.data) ? listData.data : [];
+
+    // Keep only the two requested editions: 42 (和合本100周年朗读版) & 2 (和合本(新旧约)磐石聆听版)
+    const allowedIds = [42, 2];
+    const filtered = rawItems.filter((it) => allowedIds.includes(it.categoryId));
+
+    const chosen =
+      filtered.find((it) => it.categoryId === preferredCat) ||
+      filtered[0] ||
+      rawItems[0];
+
+    if (!chosen || !chosen.fileId) {
+      return c.json({ error: '该章节暂无对应音频资源' }, 404);
+    }
+
+    const dlRes = await fetch(
+      `https://wd.bible/api/get/download/info?f=${encodeURIComponent(chosen.fileId)}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      }
+    );
+
+    if (!dlRes.ok) {
+      return c.json({ error: '获取音频播放地址失败' }, 502);
+    }
+
+    const dlData = (await dlRes.json()) as any;
+    const downloadUrl = dlData?.data?.downloadUrl || '';
+
+    if (!downloadUrl) {
+      return c.json({ error: '音频播放链接为空' }, 502);
+    }
+
+    return c.json({
+      book: book.toLowerCase(),
+      chapter,
+      categoryId: chosen.categoryId,
+      categoryName: chosen.categoryName,
+      audioName: chosen.audioName,
+      downloadUrl,
+      lyric: chosen.lyric || '',
+      availableEditions: filtered.map((it) => ({
+        categoryId: it.categoryId,
+        categoryName: it.categoryName,
+      })),
+    });
+  } catch (err: any) {
+    return c.json({ error: '音频服务请求异常: ' + String(err?.message || err) }, 500);
+  }
+});
+
