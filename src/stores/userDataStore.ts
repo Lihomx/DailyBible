@@ -8,6 +8,7 @@ export interface UserProfile {
   id: string;
   email: string;
   nickname: string;
+  checkin_name?: string;
   avatar_url: string;
   role: 'user' | 'admin';
 }
@@ -77,6 +78,7 @@ interface UserDataState {
   logout: () => Promise<void>;
   updateProfile: (patch: {
     nickname?: string;
+    checkin_name?: string;
     email?: string;
     avatar_url?: string;
   }) => Promise<void>;
@@ -380,6 +382,10 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     const updated: UserProfile = {
       ...current,
       nickname: patch.nickname !== undefined ? patch.nickname.trim() : current.nickname,
+      checkin_name:
+        patch.checkin_name !== undefined
+          ? patch.checkin_name.trim()
+          : current.checkin_name || current.nickname,
       email: patch.email !== undefined ? patch.email.trim().toLowerCase() : current.email,
       avatar_url: patch.avatar_url !== undefined ? patch.avatar_url : current.avatar_url,
       role:

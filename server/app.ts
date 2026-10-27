@@ -207,7 +207,14 @@ app.post('/auth/register', async (c) => {
 
   return c.json({
     token,
-    user: { id, email: cleanEmail, nickname: displayNick, avatar_url: '', role },
+    user: {
+      id,
+      email: cleanEmail,
+      nickname: displayNick,
+      checkin_name: displayNick,
+      avatar_url: '',
+      role,
+    },
   });
 });
 
@@ -279,12 +286,20 @@ app.post('/auth/login', async (c) => {
     maxAge: 30 * 24 * 3600,
   });
 
+  let parsedSettings: any = {};
+  try {
+    parsedSettings = JSON.parse(row.settings_json || '{}');
+  } catch {
+    parsedSettings = {};
+  }
+
   return c.json({
     token,
     user: {
       id: row.id,
       email: row.email,
       nickname: row.nickname,
+      checkin_name: parsedSettings.checkin_name || row.nickname || '',
       avatar_url: row.avatar_url || '',
       role,
     },
@@ -306,7 +321,19 @@ app.get('/me', async (c) => {
   )
     .bind(u.sub)
     .first<any>();
-  return c.json({ user: row || null });
+  if (!row) return c.json({ user: null });
+  let parsedSettings: any = {};
+  try {
+    parsedSettings = JSON.parse(row.settings_json || '{}');
+  } catch {
+    parsedSettings = {};
+  }
+  return c.json({
+    user: {
+      ...row,
+      checkin_name: parsedSettings.checkin_name || row.nickname || '',
+    },
+  });
 });
 
 app.patch('/me', async (c) => {
@@ -314,6 +341,7 @@ app.patch('/me', async (c) => {
   if (!u) return c.json({ error: '未登录' }, 401);
   const body = await c.req.json<{
     nickname?: string;
+    checkin_name?: string;
     email?: string;
     avatar_url?: string;
     settings_json?: string;
@@ -328,8 +356,24 @@ app.patch('/me', async (c) => {
   const nextEmail =
     body.email !== undefined ? body.email.trim().toLowerCase() : row.email;
   const nextAvatar = body.avatar_url !== undefined ? body.avatar_url : row.avatar_url;
-  const nextSettings =
-    body.settings_json !== undefined ? body.settings_json : row.settings_json;
+
+  let settingsObj: any = {};
+  try {
+    settingsObj = JSON.parse(row.settings_json || '{}');
+  } catch {
+    settingsObj = {};
+  }
+  if (body.settings_json !== undefined) {
+    try {
+      settingsObj = { ...settingsObj, ...JSON.parse(body.settings_json) };
+    } catch {
+      // ignore
+    }
+  }
+  if (body.checkin_name !== undefined) {
+    settingsObj.checkin_name = body.checkin_name.trim();
+  }
+  const nextSettings = JSON.stringify(settingsObj);
 
   await c.env.DB.prepare(
     `UPDATE users SET nickname = ?, email = ?, avatar_url = ?, settings_json = ? WHERE id = ?`
@@ -342,6 +386,7 @@ app.patch('/me', async (c) => {
       id: u.sub,
       email: nextEmail,
       nickname: nextNick,
+      checkin_name: settingsObj.checkin_name || nextNick,
       avatar_url: nextAvatar,
       role: row.role,
     },

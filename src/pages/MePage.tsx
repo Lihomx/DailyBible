@@ -37,6 +37,9 @@ export const MePage: React.FC = () => {
 
   // Profile edit state
   const [editNickname, setEditNickname] = useState(user?.nickname || '');
+  const [editCheckinName, setEditCheckinName] = useState(
+    user?.checkin_name || user?.nickname || ''
+  );
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [profileSaved, setProfileSaved] = useState(false);
 
@@ -55,6 +58,7 @@ export const MePage: React.FC = () => {
       const latest = useUserDataStore.getState().user;
       if (latest) {
         setEditNickname(latest.nickname);
+        setEditCheckinName(latest.checkin_name || latest.nickname);
         setEditEmail(latest.email);
       }
     }
@@ -65,6 +69,7 @@ export const MePage: React.FC = () => {
     const latest = useUserDataStore.getState().user;
     if (latest) {
       setEditNickname(latest.nickname);
+      setEditCheckinName(latest.checkin_name || latest.nickname);
       setEditEmail(latest.email);
     }
   };
@@ -96,7 +101,11 @@ export const MePage: React.FC = () => {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateProfile({ nickname: editNickname, email: editEmail });
+    await updateProfile({
+      nickname: editNickname,
+      checkin_name: editCheckinName,
+      email: editEmail,
+    });
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2000);
   };
@@ -366,6 +375,22 @@ export const MePage: React.FC = () => {
                     onChange={(e) => setEditNickname(e.target.value)}
                     className="w-full px-3.5 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs theme-text-muted mb-1">
+                    {t('打卡名字（点击「一键完成今日三段读经」时自动复制打卡文案）')}
+                  </label>
+                  <input
+                    type="text"
+                    value={editCheckinName}
+                    onChange={(e) => setEditCheckinName(e.target.value)}
+                    placeholder={t('例如：慕道 / 弟兄姊妹名字')}
+                    className="w-full px-3.5 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                  />
+                  <p className="text-[11px] theme-text-muted mt-1">
+                    {t('预览文案：')}【{editCheckinName.trim() || editNickname.trim() || t('打卡名字')}】{t('打卡，已读今日经文')}
+                  </p>
                 </div>
 
                 <div>

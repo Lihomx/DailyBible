@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Copy,
+  Check,
 } from 'lucide-react';
 import {
   loadDeshengPlan,
@@ -32,6 +34,7 @@ export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { script, t } = useSettingsStore();
   const {
+    user,
     activeGroupId,
     groups,
     joinedGroupIds,
@@ -47,6 +50,7 @@ export const HomePage: React.FC = () => {
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(1);
   const [todayDayIndex, setTodayDayIndex] = useState<number>(1);
   const [celebrating, setCelebrating] = useState(false);
+  const [copiedCheckinText, setCopiedCheckinText] = useState<string>('');
 
   // Inline expanded segment reader
   const [expandedPart, setExpandedPart] = useState<'ps' | 'nt' | 'ot' | null>(null);
@@ -106,6 +110,34 @@ export const HomePage: React.FC = () => {
       parts.includes('ot')
   ).length;
 
+  const copyCheckinMessage = async () => {
+    const checkinName = (
+      user?.checkin_name ||
+      user?.nickname ||
+      '主内肢体'
+    ).trim();
+    const text = `【${checkinName}】打卡，已读今日经文`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for older mobile webviews
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // ignore
+      }
+      document.body.removeChild(ta);
+    }
+    setCopiedCheckinText(text);
+    setTimeout(() => setCopiedCheckinText(''), 4000);
+  };
+
   const handleTogglePart = (part: 'ps' | 'nt' | 'ot') => {
     const { newlyCompletedDay } = togglePlanPart(
       activeGroup.id,
@@ -114,10 +146,11 @@ export const HomePage: React.FC = () => {
     );
     if (newlyCompletedDay) {
       triggerCelebration();
+      copyCheckinMessage();
     }
   };
 
-  const handleCompleteAllToday = () => {
+  const handleCompleteAllToday = async () => {
     const { newlyCompletedDay } = markAllDayPartsDone(
       activeGroup.id,
       dayEntry.dayIndex
@@ -125,6 +158,7 @@ export const HomePage: React.FC = () => {
     if (newlyCompletedDay) {
       triggerCelebration();
     }
+    await copyCheckinMessage();
   };
 
   const handleExpandSegment = async (seg: PlanReadingSegment) => {
@@ -439,23 +473,49 @@ export const HomePage: React.FC = () => {
           })}
         </div>
 
+        {/* Copied Checkin Message Toast */}
+        {copiedCheckinText && (
+          <div className="mt-4 p-3 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold flex items-center justify-between gap-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>
+                {t('已自动复制打卡文字：')}
+                <strong className="underline ml-1">{copiedCheckinText}</strong>
+              </span>
+            </div>
+            <span className="text-[11px] opacity-90 shrink-0">
+              {t('可直接粘贴到微信群')}
+            </span>
+          </div>
+        )}
+
         {/* Footer bar of Today Card */}
         <div className="mt-5 pt-4 border-t theme-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs theme-text-muted">
             {t(
-              '提示：点击每段左侧圆圈即可打卡完成；全部三段完成后将点亮绿色徽章与庆祝动画。'
+              '提示：点击右侧按钮可一键完成今日三段读经，并自动复制「【打卡名字】打卡，已读今日经文」。'
             )}
           </p>
 
-          {!isAllDone && (
-            <button
-              onClick={handleCompleteAllToday}
-              className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{t('一键完成今日三段读经')}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {!isAllDone ? (
+              <button
+                onClick={handleCompleteAllToday}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{t('一键完成今日三段读经')}</span>
+              </button>
+            ) : (
+              <button
+                onClick={copyCheckinMessage}
+                className="px-4 py-2 rounded-xl border border-emerald-600 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-semibold hover:bg-emerald-500/10 transition flex items-center gap-1.5"
+              >
+                <Copy className="w-4 h-4" />
+                <span>{t('复制今日打卡文字')}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
