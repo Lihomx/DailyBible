@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   User,
@@ -11,9 +11,21 @@ import {
   KeyRound,
   Trash2,
   Check,
+  History,
+  BookOpen,
+  Search,
 } from 'lucide-react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
+
+function formatTimestamp(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 export const MePage: React.FC = () => {
   const { t } = useSettingsStore();
@@ -26,7 +38,13 @@ export const MePage: React.FC = () => {
     deleteAccount,
     highlights,
     notes,
+    searchHistory,
+    fetchSearchHistory,
   } = useUserDataStore();
+
+  useEffect(() => {
+    fetchSearchHistory();
+  }, [fetchSearchHistory]);
 
   // Auth form state
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -389,7 +407,7 @@ export const MePage: React.FC = () => {
                     className="w-full px-3.5 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
                   />
                   <p className="text-[11px] theme-text-muted mt-1">
-                    {t('预览文案：')}【{editCheckinName.trim() || editNickname.trim() || t('打卡名字')}】{t('打卡，已读今日经文')}
+                    {t('预览文案：')}{editCheckinName.trim() || editNickname.trim() || t('慕道')}{t('打卡，已读今日经文')}
                   </p>
                 </div>
 
@@ -498,6 +516,96 @@ export const MePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* User's Personal Search & Opened Verses History Card */}
+      <div className="rounded-2xl border theme-border theme-card p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b theme-border pb-3">
+          <h3 className="font-bold text-base flex items-center gap-2">
+            <History className="w-4 h-4 text-brand" />
+            <span>
+              {t('我的查经搜索与打开经文记录')} ({searchHistory.length})
+            </span>
+          </h3>
+          <Link
+            to="/search"
+            className="text-xs font-semibold text-brand hover:underline flex items-center gap-1"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>{t('前往查经搜索')}</span>
+          </Link>
+        </div>
+
+        {searchHistory.length === 0 ? (
+          <p className="text-xs theme-text-muted py-4 text-center">
+            {t('暂无搜索记录。您在「搜索」页面输入的关键词及点开阅读的经文会自动记录在此。')}
+          </p>
+        ) : (
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+            {searchHistory.map((item) => (
+              <div
+                key={item.id || item.keyword}
+                className="p-3.5 rounded-xl theme-elevated border theme-border text-xs space-y-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/search?q=${encodeURIComponent(item.keyword)}`}
+                      className="text-sm font-bold text-brand hover:underline"
+                    >
+                      {item.keyword}
+                    </Link>
+                    <span className="px-2 py-0.5 rounded-full bg-brand/15 text-brand font-semibold">
+                      {t('已搜索')} {item.search_count} {t('次')}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3 theme-text-muted">
+                    <span>
+                      {t('最后搜索时间：')}
+                      <strong className="text-current">
+                        {formatTimestamp(item.last_searched_at)}
+                      </strong>
+                    </span>
+                    {item.previous_searched_at && (
+                      <span>
+                        {t('上次搜索时间：')}
+                        <strong className="text-amber-700 dark:text-amber-400">
+                          {formatTimestamp(item.previous_searched_at)}
+                        </strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {item.opened_verses && item.opened_verses.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t theme-border">
+                    <span className="inline-flex items-center gap-1 theme-text-muted">
+                      <BookOpen className="w-3.5 h-3.5 text-brand" />
+                      <span>{t('打开阅读的经文：')}</span>
+                    </span>
+                    {item.opened_verses.map((v) => (
+                      <Link
+                        key={`${v.id}-${v.opened_at}`}
+                        to={`/bible/${v.bookId}.${v.chapter}?v=${v.verse}`}
+                        className="px-2 py-0.5 rounded-md bg-brand/10 text-brand font-medium hover:bg-brand hover:text-white transition"
+                      >
+                        {t(v.label)}{' '}
+                        <span className="opacity-75 text-[11px]">
+                          ({formatTimestamp(v.opened_at)})
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[11px] theme-text-muted">
+                    {t('暂未点击打开具体经文')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

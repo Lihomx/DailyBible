@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Shield,
   Upload,
@@ -10,11 +10,23 @@ import {
   CheckCircle2,
   Sparkles,
   Eye,
+  History,
+  BookOpen,
+  RefreshCw,
 } from 'lucide-react';
 import { parsePptxFile, SermonBlock, ExtractedSlide } from '../lib/pptx';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
 import { SermonItem } from '../data/defaultSermons';
+
+function formatTimestamp(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 export const AdminPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,9 +42,17 @@ export const AdminPage: React.FC = () => {
     deleteAdminGroup,
     allUsers,
     setUserRole,
+    adminSearchLogs,
+    fetchAdminSearchLogs,
   } = useUserDataStore();
 
-  const [tab, setTab] = useState<'sermons' | 'groups' | 'users'>('sermons');
+  const [tab, setTab] = useState<'sermons' | 'groups' | 'users' | 'searchLogs'>('sermons');
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      fetchAdminSearchLogs();
+    }
+  }, [user?.role, tab, fetchAdminSearchLogs]);
 
   // PPTX Upload & Web Conversion Editor State
   const [parsing, setParsing] = useState(false);
@@ -217,6 +237,17 @@ export const AdminPage: React.FC = () => {
             }`}
           >
             {t('用户与权限')}
+          </button>
+          <button
+            onClick={() => setTab('searchLogs')}
+            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 ${
+              tab === 'searchLogs'
+                ? 'bg-brand text-white'
+                : 'theme-card border theme-border'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>{t('用户搜索与阅读记录')}</span>
           </button>
         </div>
       </div>
@@ -622,6 +653,118 @@ export const AdminPage: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* TAB 4: All Users Search & Opened Verses Logs */}
+      {tab === 'searchLogs' && (
+        <div className="rounded-2xl border theme-border theme-card p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b theme-border pb-3">
+            <div>
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <History className="w-4 h-4 text-brand" />
+                <span>
+                  {t('全站用户搜索记录与打开经文统计')} ({adminSearchLogs.length})
+                </span>
+              </h3>
+              <p className="text-xs theme-text-muted mt-0.5">
+                {t(
+                  '展示每个用户的最后搜索时间、此前搜索次数与上次搜索时间、搜索关键词，以及点击打开阅读的具体经文。'
+                )}
+              </p>
+            </div>
+
+            <button
+              onClick={() => fetchAdminSearchLogs()}
+              className="px-3 py-1.5 rounded-xl border theme-border text-xs font-semibold hover:border-brand hover:text-brand flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>{t('刷新记录')}</span>
+            </button>
+          </div>
+
+          {adminSearchLogs.length === 0 ? (
+            <div className="py-12 text-center text-xs sm:text-sm theme-text-muted">
+              {t('暂无用户搜索记录。')}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {adminSearchLogs.map((log) => (
+                <div
+                  key={log.id || `${log.user_id}-${log.keyword}`}
+                  className="p-4 rounded-xl theme-elevated border theme-border text-xs space-y-2.5"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-brand text-white font-semibold">
+                        {log.user_name || t('访客用户')}
+                      </span>
+                      {log.user_email && (
+                        <span className="theme-text-muted">
+                          ({log.user_email})
+                        </span>
+                      )}
+                      <span className="theme-text-muted">·</span>
+                      <span>
+                        {t('搜索关键词：')}
+                        <Link
+                          to={`/search?q=${encodeURIComponent(log.keyword)}`}
+                          className="text-sm font-bold text-brand hover:underline ml-0.5"
+                        >
+                          {log.keyword}
+                        </Link>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-brand/15 text-brand font-bold">
+                        {t('累计搜索')} {log.search_count} {t('次')}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 theme-text-muted">
+                      <span>
+                        {t('最后搜索时间：')}
+                        <strong className="text-current">
+                          {formatTimestamp(log.last_searched_at)}
+                        </strong>
+                      </span>
+                      {log.previous_searched_at && (
+                        <span>
+                          {t('上次搜索时间：')}
+                          <strong className="text-amber-700 dark:text-amber-400">
+                            {formatTimestamp(log.previous_searched_at)}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {log.opened_verses && log.opened_verses.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t theme-border">
+                      <span className="inline-flex items-center gap-1 theme-text-muted">
+                        <BookOpen className="w-3.5 h-3.5 text-brand" />
+                        <span>{t('打开阅读的经文：')}</span>
+                      </span>
+                      {log.opened_verses.map((v) => (
+                        <Link
+                          key={`${v.id}-${v.opened_at}`}
+                          to={`/bible/${v.bookId}.${v.chapter}?v=${v.verse}`}
+                          className="px-2 py-0.5 rounded-md bg-brand/10 text-brand font-medium hover:bg-brand hover:text-white transition"
+                        >
+                          {t(v.label)}{' '}
+                          <span className="opacity-75 text-[11px]">
+                            ({formatTimestamp(v.opened_at)})
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] theme-text-muted pt-1 border-t theme-border">
+                      {t('该次搜索暂未点击打开具体经文阅读')}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

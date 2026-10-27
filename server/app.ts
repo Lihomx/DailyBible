@@ -91,6 +91,18 @@ async function ensureDatabaseSchema(db?: any) {
         created_by TEXT NOT NULL DEFAULT 'admin',
         updated_at INTEGER NOT NULL
       )`),
+      db.prepare(`CREATE TABLE IF NOT EXISTS search_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_email TEXT NOT NULL DEFAULT '',
+        user_name TEXT NOT NULL DEFAULT '',
+        keyword TEXT NOT NULL,
+        search_count INTEGER NOT NULL DEFAULT 1,
+        previous_searched_at INTEGER DEFAULT NULL,
+        last_searched_at INTEGER NOT NULL,
+        opened_verses_json TEXT NOT NULL DEFAULT '[]',
+        UNIQUE(user_id, keyword)
+      )`),
       db.prepare(`INSERT OR IGNORE INTO reading_groups (
         id, name, description, plan_id, start_date, invite_code, is_public, created_by, created_at
       ) VALUES (
@@ -883,4 +895,226 @@ app.get('/audio/chapter', async (c) => {
     return c.json({ error: '音频服务请求异常: ' + String(err?.message || err) }, 500);
   }
 });
+
+// Search History & Opened Verses Tracking API
+app.post('/search/log', async (c) => {
+  const u = c.get('user');
+  const body = await c.req.json<{
+    clientId?: string;
+    userName?: string;
+    keyword: string;
+    incrementSearch?: boolean;
+    openedVerse?: {
+      id: string;
+      label: string;
+      bookId: string;
+      chapter: number;
+      verse: number;
+    };
+  }>();
+
+  const cleanKeyword = (body.keyword || '').trim();
+  if (!cleanKeyword) return c.json({ ok: false }, 400);
+
+  const userId = u?.sub || body.clientId || 'guest';
+  const userEmail = u?.email || '';
+  const userName = u?.nickname || body.userName || '访客用户';
+  const now = Date.now();
+
+  try {
+    const existing = await c.env.DB.prepare(
+      `SELECT * FROM search_logs WHERE user_id = ? AND keyword = ?`
+    )
+      .bind(userId, cleanKeyword)
+      .first<any>();
+
+    if (!existing) {
+      const openedArr = body.openedVerse
+        ? [{ ...body.openedVerse, opened_at: now, count: 1 }]
+        : [];
+      const id = `${userId}:${cleanKeyword}`;
+      await c.env.DB.prepare(
+        `INSERT INTO search_logs (
+          id, user_id, user_email, user_name, keyword,
+          search_count, previous_searched_at, last_searched_at, opened_verses_json
+        ) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?)`
+      )
+        .bind(
+          id,
+          userId,
+          userEmail,
+          userName,
+          cleanKeyword,
+          now,
+          JSON.stringify(openedArr)
+        )
+        .run();
+
+      return c.json({
+        ok: true,
+        entry: {
+          id,
+          user_id: userId,
+          user_email: userEmail,
+          user_name: userName,
+          keyword: cleanKeyword,
+          search_count: 1,
+          previous_searched_at: null,
+          last_searched_at: now,
+          opened_verses: openedArr,
+        },
+      });
+    } else {
+      let openedArr: Array<{
+        id: string;
+        label: string;
+        bookId: string;
+        chapter: number;
+        verse: number;
+        opened_at: number;
+        count?: number;
+      }> = [];
+      try {
+        openedArr = JSON.parse(existing.opened_verses_json || '[]');
+      } catch {
+        openedArr = [];
+      }
+
+      if (body.openedVerse) {
+        const idx = openedArr.findIndex((v) => v.id === body.openedVerse!.id);
+        if (idx >= 0) {
+          openedArr[idx] = {
+            ...openedArr[idx],
+            label: body.openedVerse.label,
+            opened_at: now,
+            count: (openedArr[idx].count || 1) + 1,
+          };
+        } else {
+          openedArr.unshift({
+            ...body.openedVerse,
+            opened_at: now,
+            count: 1,
+          });
+        }
+      }
+
+      const shouldIncrement = body.incrementSearch !== false && !body.openedVerse;
+      const nextCount = shouldIncrement
+        ? (existing.search_count || 1) + 1
+        : existing.search_count || 1;
+      const nextPrevAt = shouldIncrement
+        ? existing.last_searched_at
+        : existing.previous_searched_at;
+      const nextLastAt = shouldIncrement ? now : existing.last_searched_at;
+
+      await c.env.DB.prepare(
+        `UPDATE search_logs
+         SET user_email = ?, user_name = ?, search_count = ?,
+             previous_searched_at = ?, last_searched_at = ?, opened_verses_json = ?
+         WHERE id = ?`
+      )
+        .bind(
+          userEmail || existing.user_email,
+          userName || existing.user_name,
+          nextCount,
+          nextPrevAt,
+          nextLastAt,
+          JSON.stringify(openedArr),
+          existing.id
+        )
+        .run();
+
+      return c.json({
+        ok: true,
+        entry: {
+          id: existing.id,
+          user_id: userId,
+          user_email: userEmail || existing.user_email,
+          user_name: userName || existing.user_name,
+          keyword: cleanKeyword,
+          search_count: nextCount,
+          previous_searched_at: nextPrevAt,
+          last_searched_at: nextLastAt,
+          opened_verses: openedArr,
+        },
+      });
+    }
+  } catch (err: any) {
+    return c.json({ ok: false, error: String(err?.message || err) }, 500);
+  }
+});
+
+app.get('/search/history', async (c) => {
+  const u = c.get('user');
+  const clientId = c.req.query('clientId') || 'guest';
+  const userId = u?.sub || clientId;
+
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT * FROM search_logs WHERE user_id = ? ORDER BY last_searched_at DESC LIMIT 100`
+    )
+      .bind(userId)
+      .all<any>();
+
+    const items = (rows.results || []).map((r: any) => {
+      let opened = [];
+      try {
+        opened = JSON.parse(r.opened_verses_json || '[]');
+      } catch {
+        opened = [];
+      }
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        user_email: r.user_email,
+        user_name: r.user_name,
+        keyword: r.keyword,
+        search_count: r.search_count,
+        previous_searched_at: r.previous_searched_at,
+        last_searched_at: r.last_searched_at,
+        opened_verses: opened,
+      };
+    });
+
+    return c.json({ history: items });
+  } catch {
+    return c.json({ history: [] });
+  }
+});
+
+app.get('/admin/search-logs', async (c) => {
+  const u = c.get('user');
+  if (!u || u.role !== 'admin') return c.json({ error: '仅管理员可操作' }, 403);
+
+  try {
+    const rows = await c.env.DB.prepare(
+      `SELECT * FROM search_logs ORDER BY last_searched_at DESC LIMIT 300`
+    ).all<any>();
+
+    const items = (rows.results || []).map((r: any) => {
+      let opened = [];
+      try {
+        opened = JSON.parse(r.opened_verses_json || '[]');
+      } catch {
+        opened = [];
+      }
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        user_email: r.user_email,
+        user_name: r.user_name,
+        keyword: r.keyword,
+        search_count: r.search_count,
+        previous_searched_at: r.previous_searched_at,
+        last_searched_at: r.last_searched_at,
+        opened_verses: opened,
+      };
+    });
+
+    return c.json({ logs: items });
+  } catch {
+    return c.json({ logs: [] });
+  }
+});
+
 

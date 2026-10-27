@@ -54,6 +54,28 @@ export interface GroupMemberProgress {
   completedAll: boolean;
 }
 
+export interface OpenedVerseLogItem {
+  id: string;
+  label: string;
+  bookId: string;
+  chapter: number;
+  verse: number;
+  opened_at: number;
+  count?: number;
+}
+
+export interface SearchLogEntry {
+  id: string;
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  keyword: string;
+  search_count: number;
+  previous_searched_at: number | null;
+  last_searched_at: number;
+  opened_verses: OpenedVerseLogItem[];
+}
+
 interface UserDataState {
   user: UserProfile | null;
   allUsers: UserProfile[];
@@ -67,6 +89,8 @@ interface UserDataState {
   sermons: SermonItem[];
   batchCopyItems: MatchedVerseResult[];
   batchSelectMode: boolean;
+  searchHistory: SearchLogEntry[];
+  adminSearchLogs: SearchLogEntry[];
 
   // Auth & Profile actions
   loginOrRegister: (
@@ -136,6 +160,21 @@ interface UserDataState {
   removeBatchCopyItem: (id: string) => void;
   clearBatchCopy: () => void;
 
+  // Search History & Opened Verses Tracking actions
+  recordSearchQuery: (keyword: string) => Promise<void>;
+  recordSearchOpenedVerse: (
+    keyword: string,
+    verseInfo: {
+      id: string;
+      label: string;
+      bookId: string;
+      chapter: number;
+      verse: number;
+    }
+  ) => Promise<void>;
+  fetchSearchHistory: () => Promise<void>;
+  fetchAdminSearchLogs: () => Promise<void>;
+
   // Cloud sync
   syncWithCloud: () => Promise<void>;
 }
@@ -190,6 +229,7 @@ function loadPersistedData() {
       notes: [] as NoteRecord[],
       sermons: DEFAULT_SERMONS,
       batchCopyItems: [] as MatchedVerseResult[],
+      searchHistory: [] as SearchLogEntry[],
     };
   }
 
@@ -233,6 +273,7 @@ function loadPersistedData() {
         notes: Array.isArray(parsed.notes) ? parsed.notes : [],
         sermons: savedSermons,
         batchCopyItems: Array.isArray(parsed.batchCopyItems) ? parsed.batchCopyItems : [],
+        searchHistory: Array.isArray(parsed.searchHistory) ? parsed.searchHistory : [],
       };
     }
   } catch {
@@ -258,6 +299,7 @@ function loadPersistedData() {
     notes: [] as NoteRecord[],
     sermons: DEFAULT_SERMONS,
     batchCopyItems: [] as MatchedVerseResult[],
+    searchHistory: [] as SearchLogEntry[],
   };
 }
 
@@ -281,10 +323,26 @@ function persistState(state: Partial<UserDataState>) {
       sermons: state.sermons !== undefined ? state.sermons : current.sermons,
       batchCopyItems:
         state.batchCopyItems !== undefined ? state.batchCopyItems : current.batchCopyItems,
+      searchHistory:
+        state.searchHistory !== undefined ? state.searchHistory : current.searchHistory,
     };
     localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(next));
   } catch {
     // ignore quota errors
+  }
+}
+
+function getClientDeviceId(): string {
+  if (typeof window === 'undefined') return 'guest';
+  try {
+    let cid = localStorage.getItem('dailybible_client_id');
+    if (!cid) {
+      cid = 'guest-' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('dailybible_client_id', cid);
+    }
+    return cid;
+  } catch {
+    return 'guest';
   }
 }
 
@@ -293,6 +351,7 @@ const initialData = loadPersistedData();
 export const useUserDataStore = create<UserDataState>((set, get) => ({
   ...initialData,
   batchSelectMode: false,
+  adminSearchLogs: [],
 
   loginOrRegister: async (mode, email, password, nickname) => {
     const cleanEmail = email.trim().toLowerCase();
@@ -724,6 +783,194 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
   clearBatchCopy: () => {
     set({ batchCopyItems: [] });
     persistState({ batchCopyItems: [] });
+  },
+
+  recordSearchQuery: async (keyword) => {
+    const clean = keyword.trim();
+    if (!clean) return;
+
+    const u = get().user;
+    const deviceId = getClientDeviceId();
+    const userId = u?.id || deviceId;
+    const userEmail = u?.email || '';
+    const userName = u?.checkin_name || u?.nickname || '访客用户';
+    const now = Date.now();
+
+    // Update local searchHistory optimistically
+    const current = get().searchHistory;
+    const existingIdx = current.findIndex((item) => item.keyword === clean);
+    let nextHistory: SearchLogEntry[];
+    if (existingIdx >= 0) {
+      const existing = current[existingIdx];
+      const updated: SearchLogEntry = {
+        ...existing,
+        user_id: userId,
+        user_email: userEmail,
+        user_name: userName,
+        search_count: existing.search_count + 1,
+        previous_searched_at: existing.last_searched_at,
+        last_searched_at: now,
+      };
+      nextHistory = [
+        updated,
+        ...current.filter((_, idx) => idx !== existingIdx),
+      ];
+    } else {
+      const created: SearchLogEntry = {
+        id: `slog_${now}`,
+        user_id: userId,
+        user_email: userEmail,
+        user_name: userName,
+        keyword: clean,
+        search_count: 1,
+        previous_searched_at: null,
+        last_searched_at: now,
+        opened_verses: [],
+      };
+      nextHistory = [created, ...current];
+    }
+    set({ searchHistory: nextHistory });
+    persistState({ searchHistory: nextHistory });
+
+    try {
+      const res = await fetch('/api/search/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: clean,
+          incrementSearch: true,
+          userId,
+          userEmail,
+          userName,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { ok?: boolean; entry?: SearchLogEntry };
+        if (data.entry) {
+          const merged = get().searchHistory.map((item) =>
+            item.keyword === clean ? data.entry! : item
+          );
+          set({ searchHistory: merged });
+          persistState({ searchHistory: merged });
+        }
+      }
+    } catch {
+      // Offline mode keeps local state intact
+    }
+  },
+
+  recordSearchOpenedVerse: async (keyword, verseInfo) => {
+    const clean = keyword.trim() || '直接阅读';
+    const u = get().user;
+    const deviceId = getClientDeviceId();
+    const userId = u?.id || deviceId;
+    const userEmail = u?.email || '';
+    const userName = u?.checkin_name || u?.nickname || '访客用户';
+    const now = Date.now();
+
+    const newVerseItem: OpenedVerseLogItem = {
+      ...verseInfo,
+      opened_at: now,
+    };
+
+    const current = get().searchHistory;
+    const existingIdx = current.findIndex((item) => item.keyword === clean);
+    let nextHistory: SearchLogEntry[];
+    if (existingIdx >= 0) {
+      const existing = current[existingIdx];
+      const filteredVerses = existing.opened_verses.filter(
+        (v) => v.id !== verseInfo.id
+      );
+      const updated: SearchLogEntry = {
+        ...existing,
+        user_id: userId,
+        user_email: userEmail,
+        user_name: userName,
+        opened_verses: [newVerseItem, ...filteredVerses].slice(0, 50),
+      };
+      nextHistory = [
+        updated,
+        ...current.filter((_, idx) => idx !== existingIdx),
+      ];
+    } else {
+      const created: SearchLogEntry = {
+        id: `slog_${now}`,
+        user_id: userId,
+        user_email: userEmail,
+        user_name: userName,
+        keyword: clean,
+        search_count: 1,
+        previous_searched_at: null,
+        last_searched_at: now,
+        opened_verses: [newVerseItem],
+      };
+      nextHistory = [created, ...current];
+    }
+    set({ searchHistory: nextHistory });
+    persistState({ searchHistory: nextHistory });
+
+    try {
+      const res = await fetch('/api/search/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: clean,
+          incrementSearch: false,
+          openedVerse: verseInfo,
+          userId,
+          userEmail,
+          userName,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { ok?: boolean; entry?: SearchLogEntry };
+        if (data.entry) {
+          const merged = get().searchHistory.map((item) =>
+            item.keyword === clean ? data.entry! : item
+          );
+          set({ searchHistory: merged });
+          persistState({ searchHistory: merged });
+        }
+      }
+    } catch {
+      // Offline mode keeps local state intact
+    }
+  },
+
+  fetchSearchHistory: async () => {
+    const u = get().user;
+    const deviceId = getClientDeviceId();
+    const userId = u?.id || deviceId;
+
+    try {
+      const res = await fetch(
+        `/api/search/history?userId=${encodeURIComponent(userId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { logs?: SearchLogEntry[] };
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          set({ searchHistory: data.logs });
+          persistState({ searchHistory: data.logs });
+        }
+      }
+    } catch {
+      // Offline mode keeps local state
+    }
+  },
+
+  fetchAdminSearchLogs: async () => {
+    try {
+      const res = await fetch('/api/admin/search-logs');
+      if (res.ok) {
+        const data = (await res.json()) as { logs?: SearchLogEntry[] };
+        if (Array.isArray(data.logs)) {
+          set({ adminSearchLogs: data.logs });
+        }
+      }
+    } catch {
+      // Offline fallback: use local searchHistory
+      set({ adminSearchLogs: get().searchHistory });
+    }
   },
 
   syncWithCloud: async () => {

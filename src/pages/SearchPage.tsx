@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -9,6 +9,9 @@ import {
   ChevronRight,
   ExternalLink,
   Layers,
+  Clock,
+  BookOpen,
+  History,
 } from 'lucide-react';
 import { BIBLE_BOOKS } from '../data/books';
 import { loadFullBibleBundle, FullBibleBundle } from '../lib/bible';
@@ -22,6 +25,15 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
 
 const PAGE_SIZE = 50;
+
+function formatTimestamp(ts: number | null | undefined): string {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 const QUICK_EXAMPLES = [
   { label: '太6:33', desc: '简称查经' },
@@ -45,6 +57,10 @@ export const SearchPage: React.FC = () => {
     batchCopyItems,
     toggleBatchCopyItem,
     addBatchCopyItems,
+    searchHistory,
+    recordSearchQuery,
+    recordSearchOpenedVerse,
+    fetchSearchHistory,
   } = useUserDataStore();
 
   const [query, setQuery] = useState(initialQ);
@@ -52,6 +68,25 @@ export const SearchPage: React.FC = () => {
   const [bundle, setBundle] = useState<FullBibleBundle | null>(null);
   const [loadingBundle, setLoadingBundle] = useState(true);
   const [page, setPage] = useState(1);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const lastRecordedKeywordRef = useRef<string>('');
+
+  useEffect(() => {
+    fetchSearchHistory();
+  }, [fetchSearchHistory]);
+
+  // Record search query after 1 second of typing inactivity
+  useEffect(() => {
+    const clean = query.trim();
+    if (!clean) return;
+    const timer = window.setTimeout(() => {
+      if (lastRecordedKeywordRef.current !== clean) {
+        lastRecordedKeywordRef.current = clean;
+        recordSearchQuery(clean);
+      }
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [query, recordSearchQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,9 +161,18 @@ export const SearchPage: React.FC = () => {
     page * PAGE_SIZE
   );
 
+  // Match current keyword in user's search history
+  const currentKeywordRecord = useMemo(() => {
+    const clean = query.trim();
+    if (!clean) return null;
+    return searchHistory.find((h) => h.keyword === clean) || null;
+  }, [query, searchHistory]);
+
   const handleQuickQuery = (qText: string) => {
     setQuery(qText);
     setSearchParams({ q: qText });
+    lastRecordedKeywordRef.current = qText.trim();
+    recordSearchQuery(qText.trim());
   };
 
   const renderHighlightedText = (text: string, terms: string[]) => {
@@ -164,6 +208,12 @@ export const SearchPage: React.FC = () => {
               setQuery(e.target.value);
               setSearchParams(e.target.value ? { q: e.target.value } : {});
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && query.trim()) {
+                lastRecordedKeywordRef.current = query.trim();
+                recordSearchQuery(query.trim());
+              }
+            }}
             placeholder={t(
               '输入经文或关键字：如 太6:33、太六33、太1.17-2.4、7:1、耶穌 愛 我、光-暗'
             )}
@@ -181,6 +231,127 @@ export const SearchPage: React.FC = () => {
             </button>
           )}
         </div>
+
+        {/* Previous Search Record Banner for Current Keyword */}
+        {currentKeywordRecord && (
+          <div className="p-3 rounded-xl border border-brand/30 bg-brand/5 text-xs space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 font-medium">
+                <Clock className="w-3.5 h-3.5 text-brand shrink-0" />
+                <span>
+                  {t('关键词')}「<strong className="text-brand">{currentKeywordRecord.keyword}</strong>」
+                  {t('累计已搜索')} <strong className="text-brand">{currentKeywordRecord.search_count}</strong> {t('次')}
+                </span>
+                <span className="theme-text-muted">·</span>
+                <span className="theme-text-muted">
+                  {t('本次/最后搜索：')}{formatTimestamp(currentKeywordRecord.last_searched_at)}
+                </span>
+                {currentKeywordRecord.previous_searched_at && (
+                  <>
+                    <span className="theme-text-muted">·</span>
+                    <span className="text-amber-700 dark:text-amber-400 font-medium">
+                      {t('上次搜索时间：')}{formatTimestamp(currentKeywordRecord.previous_searched_at)}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowHistoryPanel((v) => !v)}
+                className="inline-flex items-center gap-1 text-brand font-semibold hover:underline"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>
+                  {showHistoryPanel ? t('收起全部搜索记录') : t('查看全部搜索记录')} ({searchHistory.length})
+                </span>
+              </button>
+            </div>
+
+            {currentKeywordRecord.opened_verses &&
+              currentKeywordRecord.opened_verses.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-brand/15">
+                  <span className="inline-flex items-center gap-1 theme-text-muted">
+                    <BookOpen className="w-3.5 h-3.5 text-brand" />
+                    <span>{t('该词下曾打开阅读的经文：')}</span>
+                  </span>
+                  {currentKeywordRecord.opened_verses.map((v) => (
+                    <Link
+                      key={`${v.id}-${v.opened_at}`}
+                      to={`/bible/${v.bookId}.${v.chapter}?v=${v.verse}`}
+                      className="px-2 py-0.5 rounded-md bg-brand/15 text-brand font-medium hover:bg-brand hover:text-white transition"
+                      title={`${t('打开时间：')}${formatTimestamp(v.opened_at)}`}
+                    >
+                      {t(v.label)}
+                    </Link>
+                  ))}
+                </div>
+              )}
+          </div>
+        )}
+
+        {/* Collapsible Full Search History Panel */}
+        {showHistoryPanel && searchHistory.length > 0 && (
+          <div className="p-3.5 rounded-xl border theme-border theme-card space-y-2.5 max-h-72 overflow-y-auto">
+            <div className="flex items-center justify-between border-b theme-border pb-2">
+              <h4 className="text-xs font-bold flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-brand" />
+                <span>{t('我的搜索与打开经文记录')}</span>
+              </h4>
+              <button
+                onClick={() => setShowHistoryPanel(false)}
+                className="text-xs theme-text-muted hover:text-brand"
+              >
+                {t('关闭')}
+              </button>
+            </div>
+            <div className="space-y-2">
+              {searchHistory.slice(0, 30).map((log) => (
+                <div
+                  key={log.id || log.keyword}
+                  className="p-2.5 rounded-lg theme-elevated border theme-border text-xs space-y-1"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      onClick={() => handleQuickQuery(log.keyword)}
+                      className="font-bold text-brand hover:underline text-left"
+                    >
+                      {log.keyword}
+                    </button>
+                    <div className="flex flex-wrap items-center gap-2 theme-text-muted text-[11px]">
+                      <span className="px-1.5 py-0.5 rounded bg-brand/10 text-brand font-semibold">
+                        {t('已搜')} {log.search_count} {t('次')}
+                      </span>
+                      <span>
+                        {t('最后搜索：')}{formatTimestamp(log.last_searched_at)}
+                      </span>
+                      {log.previous_searched_at && (
+                        <span>
+                          {t('上次搜索：')}{formatTimestamp(log.previous_searched_at)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {log.opened_verses && log.opened_verses.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="theme-text-muted text-[11px]">
+                        {t('打开阅读经文：')}
+                      </span>
+                      {log.opened_verses.map((v) => (
+                        <Link
+                          key={`${v.id}-${v.opened_at}`}
+                          to={`/bible/${v.bookId}.${v.chapter}?v=${v.verse}`}
+                          className="px-2 py-0.5 rounded bg-brand/10 text-brand hover:bg-brand hover:text-white transition text-[11px]"
+                        >
+                          {t(v.label)} ({formatTimestamp(v.opened_at).slice(5, 16)})
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filter Selects: Version, Scope, Mode Info */}
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -210,6 +381,16 @@ export const SearchPage: React.FC = () => {
                 </option>
               ))}
             </select>
+
+            {!currentKeywordRecord && searchHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistoryPanel((v) => !v)}
+                className="text-xs font-medium flex items-center gap-1 px-2.5 py-1.5 rounded-md border theme-border hover:border-brand text-brand"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>{t('搜索记录')} ({searchHistory.length})</span>
+              </button>
+            )}
           </div>
 
           {/* Batch Add Current Page button */}
@@ -335,6 +516,20 @@ export const SearchPage: React.FC = () => {
               >
                 <Link
                   to={`/bible/${item.bookId}.${item.chapter}?v=${item.verse}`}
+                  onClick={() => {
+                    const cleanKw = query.trim();
+                    if (cleanKw && lastRecordedKeywordRef.current !== cleanKw) {
+                      lastRecordedKeywordRef.current = cleanKw;
+                      recordSearchQuery(cleanKw);
+                    }
+                    recordSearchOpenedVerse(cleanKw || `${bookName} ${item.chapter}:${item.verse}`, {
+                      id: item.id,
+                      label: `${item.bookNameSimp} ${item.chapter}:${item.verse}`,
+                      bookId: item.bookId,
+                      chapter: item.chapter,
+                      verse: item.verse,
+                    });
+                  }}
                   className="hover:underline flex items-center gap-1"
                 >
                   <span>{t('查看上下文')}</span>

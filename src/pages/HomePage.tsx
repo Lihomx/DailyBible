@@ -116,7 +116,7 @@ export const HomePage: React.FC = () => {
       user?.nickname ||
       '主内肢体'
     ).trim();
-    const text = `【${checkinName}】打卡，已读今日经文`;
+    const text = `${checkinName}打卡，已读今日经文`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -493,7 +493,7 @@ export const HomePage: React.FC = () => {
         <div className="mt-5 pt-4 border-t theme-border flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs theme-text-muted">
             {t(
-              '提示：点击右侧按钮可一键完成今日三段读经，并自动复制「【打卡名字】打卡，已读今日经文」。'
+              '提示：点击右侧按钮可一键完成今日三段读经，并自动复制「打卡名字打卡，已读今日经文」。'
             )}
           </p>
 
