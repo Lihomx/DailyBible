@@ -240,17 +240,24 @@ app.post('/auth/login', async (c) => {
     .bind(cleanEmail)
     .first<any>();
 
-  // Auto-create default admin account on first login if not yet in D1
-  if (!row && cleanEmail === adminEmail && password && password.length >= 6) {
+  if (!row) {
+    // Auto-create account on first login if email is not yet registered in D1
+    // (handles users who previously used local/offline mode or forgot to switch to Register tab)
+    if (!cleanEmail || !cleanEmail.includes('@') || !password || password.length < 6) {
+      return c.json({ error: '请输入有效邮箱且密码不少于 6 位' }, 400);
+    }
+    const role: 'user' | 'admin' = cleanEmail === adminEmail ? 'admin' : 'user';
     const salt = generateSalt();
     const passwordHash = await hashPassword(password, salt);
-    const id = 'admin-affbizm';
+    const id = cleanEmail === adminEmail ? 'admin-affbizm' : crypto.randomUUID();
+    const displayNick = cleanEmail === adminEmail ? '教会管理员' : cleanEmail.split('@')[0];
     const now = Date.now();
+
     await c.env.DB.prepare(
       `INSERT OR IGNORE INTO users (id, email, password_hash, salt, nickname, role, created_at)
-       VALUES (?, ?, ?, ?, '教会管理员', 'admin', ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-      .bind(id, cleanEmail, passwordHash, salt, now)
+      .bind(id, cleanEmail, passwordHash, salt, displayNick, role, now)
       .run();
     await c.env.DB.prepare(
       `INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at)
@@ -264,12 +271,12 @@ app.post('/auth/login', async (c) => {
   }
 
   if (!row) {
-    return c.json({ error: '账号不存在或密码错误' }, 401);
+    return c.json({ error: '账号不存在' }, 401);
   }
 
   const hash = await hashPassword(password || '', row.salt);
   if (hash !== row.password_hash) {
-    return c.json({ error: '账号不存在或密码错误' }, 401);
+    return c.json({ error: '密码错误，请确认密码是否正确' }, 401);
   }
 
   // Ensure configured admin email always gets admin role
@@ -350,8 +357,9 @@ app.get('/me', async (c) => {
 
 app.patch('/me', async (c) => {
   const u = c.get('user');
-  if (!u) return c.json({ error: '未登录' }, 401);
   const body = await c.req.json<{
+    userId?: string;
+    currentEmail?: string;
     nickname?: string;
     checkin_name?: string;
     email?: string;
@@ -359,9 +367,22 @@ app.patch('/me', async (c) => {
     settings_json?: string;
   }>();
 
-  const row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
-    .bind(u.sub)
-    .first<any>();
+  let row: any = null;
+  if (u?.sub) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+      .bind(u.sub)
+      .first<any>();
+  }
+  if (!row && body.userId) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+      .bind(body.userId)
+      .first<any>();
+  }
+  if (!row && body.currentEmail) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+      .bind(body.currentEmail.trim().toLowerCase())
+      .first<any>();
+  }
   if (!row) return c.json({ error: '用户不存在' }, 404);
 
   const nextNick = body.nickname !== undefined ? body.nickname.trim() : row.nickname;
@@ -390,12 +411,30 @@ app.patch('/me', async (c) => {
   await c.env.DB.prepare(
     `UPDATE users SET nickname = ?, email = ?, avatar_url = ?, settings_json = ? WHERE id = ?`
   )
-    .bind(nextNick, nextEmail, nextAvatar, nextSettings, u.sub)
+    .bind(nextNick, nextEmail, nextAvatar, nextSettings, row.id)
     .run();
 
+  const secret = c.env.JWT_SECRET || 'dailybible-default-jwt-secret-change-in-production';
+  const payload: JwtUserPayload = {
+    sub: row.id,
+    email: nextEmail,
+    role: row.role,
+    nickname: nextNick,
+    exp: Date.now() + 30 * 24 * 3600 * 1000,
+  };
+  const token = await signJwt(payload, secret);
+
+  setCookie(c, 'db_token', token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'Lax',
+    maxAge: 30 * 24 * 3600,
+  });
+
   return c.json({
+    token,
     user: {
-      id: u.sub,
+      id: row.id,
       email: nextEmail,
       nickname: nextNick,
       checkin_name: settingsObj.checkin_name || nextNick,

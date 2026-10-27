@@ -82,16 +82,6 @@ export const MePage: React.FC = () => {
     }
   };
 
-  const handleQuickAdminLogin = async () => {
-    await loginOrRegister('login', 'affbizm@gmail.com', 'admin123456', '教会管理员');
-    const latest = useUserDataStore.getState().user;
-    if (latest) {
-      setEditNickname(latest.nickname);
-      setEditCheckinName(latest.checkin_name || latest.nickname);
-      setEditEmail(latest.email);
-    }
-  };
-
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -288,20 +278,6 @@ export const MePage: React.FC = () => {
               {authMode === 'login' ? t('立即登录') : t('立即注册')}
             </button>
           </form>
-
-          {/* One-click Admin Demo Login for affbizm@gmail.com */}
-          <div className="pt-3 border-t theme-border text-center">
-            <button
-              type="button"
-              onClick={handleQuickAdminLogin}
-              className="text-xs text-brand font-semibold hover:underline inline-flex items-center gap-1"
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>
-                {t('一键使用预设管理员邮箱 (affbizm@gmail.com) 登录测试')}
-              </span>
-            </button>
-          </div>
         </div>
       ) : (
         /* Logged In -> Personal Profile Modification & Account Security */

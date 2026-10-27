@@ -371,6 +371,13 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.token) {
+          try {
+            localStorage.setItem('dailybible_token', data.token);
+          } catch {
+            // ignore
+          }
+        }
         if (data.user) {
           const allUsers = [...get().allUsers];
           const idx = allUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
@@ -454,11 +461,25 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     };
 
     try {
-      await fetch('/api/me', {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/me', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        headers,
+        body: JSON.stringify({
+          ...patch,
+          userId: current.id,
+          currentEmail: current.email,
+        }),
       });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.token) {
+          localStorage.setItem('dailybible_token', data.token);
+        }
+      }
     } catch {
       // ignore offline
     }
