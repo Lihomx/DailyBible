@@ -14,3 +14,9 @@ not_found_handling = "single-page-application"
 [vars]
 ADMIN_EMAIL = "affbizm@gmail.com"
 JWT_SECRET = "dailybible-default-jwt-secret-change-in-production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dailybible-db"
+database_id = "89947679-c802-4c44-9af3-11eccc37ce35"
+
