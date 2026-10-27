@@ -4,7 +4,11 @@ import { BIBLE_BOOKS, BOOK_BY_ID, getBookName, getBookAbbr } from '../data/books
 import { useSettingsStore } from './settingsStore';
 import { PlanDayEntry, PlanReadingSegment } from '../lib/plan';
 
-export type AudioEditionId = 42 | 2; // 42 = 和合本100周年朗读版, 2 = 和合本（新旧约）磐石聆听版
+export type AudioEditionId = 42 | 2 | 61 | 3;
+// 42 = 和合本100周年朗读版
+// 2  = 和合本(新旧约)磐石聆听版
+// 61 = 华语有声戏剧圣经
+// 3  = 和合本(广播剧版)
 
 export interface LyricCue {
   verse: number; // 0 = chapter title, >=1 = verse number
@@ -26,6 +30,8 @@ export interface PlanQueueChapterItem {
 export const AUDIO_EDITIONS: Array<{ id: AudioEditionId; label: string; shortLabel: string }> = [
   { id: 42, label: '和合本100周年朗读版', shortLabel: '100周年版' },
   { id: 2, label: '和合本(新旧约)磐石聆听版', shortLabel: '磐石聆听版' },
+  { id: 61, label: '华语有声戏剧圣经', shortLabel: '有声戏剧版' },
+  { id: 3, label: '和合本(广播剧版)', shortLabel: '广播剧版' },
 ];
 
 export function buildPlanDayAudioQueue(dayEntry: PlanDayEntry): PlanQueueChapterItem[] {
@@ -132,8 +138,9 @@ function loadAudioPrefs(): {
     const raw = localStorage.getItem(PREF_KEY);
     if (raw) {
       const p = JSON.parse(raw);
+      const validIds: AudioEditionId[] = [42, 2, 61, 3];
       return {
-        editionId: p.editionId === 2 ? 2 : 42,
+        editionId: validIds.includes(p.editionId) ? p.editionId : 42,
         autoNextChapter: p.autoNextChapter !== undefined ? Boolean(p.autoNextChapter) : true,
         rate: typeof p.rate === 'number' ? p.rate : 1.0,
         lyricFocusMode: p.lyricFocusMode !== undefined ? Boolean(p.lyricFocusMode) : true,

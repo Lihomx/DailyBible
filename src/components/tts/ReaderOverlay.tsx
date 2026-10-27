@@ -189,14 +189,14 @@ export const ReaderOverlay: React.FC = () => {
           {/* Bottom Fullscreen Controls */}
           <div className="max-w-xl mx-auto w-full space-y-4 pt-3 border-t theme-border">
             {/* Edition switcher */}
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
               {AUDIO_EDITIONS.map((ed) => {
                 const active = editionId === ed.id;
                 return (
                   <button
                     key={ed.id}
                     onClick={() => setEditionId(ed.id as AudioEditionId)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition ${
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition ${
                       active
                         ? 'bg-brand text-white border-brand shadow-sm'
                         : 'theme-border theme-text-muted'

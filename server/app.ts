@@ -783,8 +783,12 @@ app.get('/audio/chapter', async (c) => {
       lyric: string;
     }> = Array.isArray(listData?.data) ? listData.data : [];
 
-    // Keep only the two requested editions: 42 (和合本100周年朗读版) & 2 (和合本(新旧约)磐石聆听版)
-    const allowedIds = [42, 2];
+    // Support all 4 official audio Bible editions:
+    // 42: 和合本100周年朗读版
+    // 2:  和合本（新旧约）磐石聆听版
+    // 61: 华语有声戏剧圣经
+    // 3:  和合本（广播剧版）
+    const allowedIds = [42, 2, 61, 3];
     const filtered = rawItems.filter((it) => allowedIds.includes(it.categoryId));
 
     const chosen =
