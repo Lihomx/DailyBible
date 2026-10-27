@@ -13,6 +13,8 @@ import {
   History,
   BookOpen,
   RefreshCw,
+  KeyRound,
+  UserPlus,
 } from 'lucide-react';
 import { parsePptxFile, SermonBlock, ExtractedSlide } from '../lib/pptx';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -41,18 +43,31 @@ export const AdminPage: React.FC = () => {
     createAdminGroup,
     deleteAdminGroup,
     allUsers,
+    fetchAdminUsers,
     setUserRole,
+    adminResetUserPassword,
+    adminCreateOrUpdateUser,
+    adminDeleteUser,
     adminSearchLogs,
     fetchAdminSearchLogs,
   } = useUserDataStore();
 
   const [tab, setTab] = useState<'sermons' | 'groups' | 'users' | 'searchLogs'>('sermons');
 
+  // Admin user password reset & user creation states
+  const [resetPwdMap, setResetPwdMap] = useState<Record<string, string>>({});
+  const [resetMsgMap, setResetMsgMap] = useState<Record<string, string>>({});
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserNickname, setNewUserNickname] = useState('');
+  const [newUserPwd, setNewUserPwd] = useState('');
+  const [newUserMsg, setNewUserMsg] = useState('');
+
   useEffect(() => {
     if (user?.role === 'admin') {
+      fetchAdminUsers();
       fetchAdminSearchLogs();
     }
-  }, [user?.role, tab, fetchAdminSearchLogs]);
+  }, [user?.role, tab, fetchAdminUsers, fetchAdminSearchLogs]);
 
   // PPTX Upload & Web Conversion Editor State
   const [parsing, setParsing] = useState(false);
@@ -615,43 +630,262 @@ export const AdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: Users Management */}
+      {/* TAB 3: Users Management & Password Reset */}
       {tab === 'users' && (
-        <div className="rounded-2xl border theme-border theme-card p-5 space-y-4">
-          <h3 className="font-bold text-base">
-            {t('注册用户与管理员权限列表')} ({allUsers.length})
-          </h3>
-          <div className="divide-y theme-border text-xs sm:text-sm">
-            {allUsers.map((u) => (
-              <div
-                key={u.id}
-                className="py-3 flex items-center justify-between gap-3"
-              >
-                <div>
-                  <div className="font-bold">
-                    {u.nickname}{' '}
-                    <span className="font-normal theme-text-muted">({u.email})</span>
-                  </div>
-                  <div className="text-xs theme-text-muted">
-                    {t('当前角色：')}
-                    <strong className={u.role === 'admin' ? 'text-brand' : ''}>
-                      {u.role === 'admin' ? t('管理员') : t('普通成员')}
-                    </strong>
-                  </div>
-                </div>
+        <div className="space-y-6">
+          {/* Quick Add / Reset Any Email Password Card */}
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setNewUserMsg('');
+              const res = await adminCreateOrUpdateUser({
+                email: newUserEmail,
+                password: newUserPwd,
+                nickname: newUserNickname,
+              });
+              if (res.ok) {
+                setNewUserMsg(
+                  `已成功为 ${newUserEmail.trim()} 设置密码（${newUserPwd}）！`
+                );
+                setNewUserEmail('');
+                setNewUserNickname('');
+                setNewUserPwd('');
+                fetchAdminUsers();
+              } else {
+                setNewUserMsg(res.error || '操作失败');
+              }
+            }}
+            className="rounded-2xl border theme-border theme-card p-5 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b theme-border pb-3">
+              <h3 className="font-bold text-base flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-brand" />
+                <span>{t('新增用户 / 按邮箱直接重置密码')}</span>
+              </h3>
+              <span className="text-xs theme-text-muted">
+                {t('输入任意用户邮箱和新密码即可立即生效（若账号未注册会自动创建）')}
+              </span>
+            </div>
 
-                {u.email.toLowerCase() !== 'affbizm@gmail.com' && (
-                  <button
-                    onClick={() =>
-                      setUserRole(u.id, u.role === 'admin' ? 'user' : 'admin')
-                    }
-                    className="px-3 py-1.5 rounded-xl border theme-border text-xs hover:border-brand"
-                  >
-                    {u.role === 'admin' ? t('设为普通成员') : t('设为管理员')}
-                  </button>
-                )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs sm:text-sm">
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">
+                  {t('用户邮箱')}
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="例如：lizhenyuan@gmail.com"
+                  className="w-full px-3 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                />
               </div>
-            ))}
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">
+                  {t('昵称 / 打卡名字（选填）')}
+                </label>
+                <input
+                  type="text"
+                  value={newUserNickname}
+                  onChange={(e) => setNewUserNickname(e.target.value)}
+                  placeholder={t('例如：慕道 / 弟兄姊妹名字')}
+                  className="w-full px-3 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                />
+              </div>
+              <div>
+                <label className="block text-xs theme-text-muted mb-1">
+                  {t('设置新密码（至少 6 位）')}
+                </label>
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  value={newUserPwd}
+                  onChange={(e) => setNewUserPwd(e.target.value)}
+                  placeholder={t('例如：123456')}
+                  className="w-full px-3 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {newUserMsg ? (
+                <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{newUserMsg}</span>
+                </span>
+              ) : (
+                <span />
+              )}
+
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-brand text-white text-xs sm:text-sm font-semibold hover:bg-brand-hover flex items-center gap-1.5"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>{t('确认创建 / 重置该邮箱密码')}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* All Registered Users List with One-Click Password Reset */}
+          <div className="rounded-2xl border theme-border theme-card p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b theme-border pb-3">
+              <div>
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  <Users className="w-4 h-4 text-brand" />
+                  <span>
+                    {t('全站注册用户管理与密码重置')} ({allUsers.length})
+                  </span>
+                </h3>
+                <p className="text-xs theme-text-muted mt-0.5">
+                  {t('可在此直接帮任意弟兄姊妹重置登录密码、切换管理员权限或删除测试账号')}
+                </p>
+              </div>
+
+              <button
+                onClick={() => fetchAdminUsers()}
+                className="px-3 py-1.5 rounded-xl border theme-border text-xs font-semibold hover:border-brand hover:text-brand flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{t('刷新用户列表')}</span>
+              </button>
+            </div>
+
+            <div className="divide-y theme-border text-xs sm:text-sm">
+              {allUsers.map((u) => {
+                const pwdVal = resetPwdMap[u.id] ?? '';
+                const msgVal = resetMsgMap[u.id] ?? '';
+                return (
+                  <div
+                    key={u.id}
+                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="font-bold text-sm flex flex-wrap items-center gap-2">
+                        <span>{u.nickname}</span>
+                        {u.checkin_name && u.checkin_name !== u.nickname && (
+                          <span className="px-2 py-0.5 rounded bg-brand/10 text-brand text-xs">
+                            {t('打卡名：')}{u.checkin_name}
+                          </span>
+                        )}
+                        <span className="font-normal theme-text-muted">
+                          ({u.email})
+                        </span>
+                      </div>
+                      <div className="text-xs theme-text-muted flex items-center gap-3">
+                        <span>
+                          {t('当前角色：')}
+                          <strong
+                            className={u.role === 'admin' ? 'text-brand' : ''}
+                          >
+                            {u.role === 'admin' ? t('管理员') : t('普通成员')}
+                          </strong>
+                        </span>
+                      </div>
+                      {msgVal && (
+                        <div className="text-xs font-semibold text-emerald-600 flex items-center gap-1 pt-0.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{msgVal}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Password Reset Input + Buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={pwdVal}
+                          onChange={(e) =>
+                            setResetPwdMap((prev) => ({
+                              ...prev,
+                              [u.id]: e.target.value,
+                            }))
+                          }
+                          placeholder={t('输入新密码 (至少6位)')}
+                          className="w-36 sm:w-40 px-2.5 py-1.5 rounded-lg border theme-border theme-elevated text-xs outline-none focus:border-brand"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const targetPwd = (pwdVal || '').trim() || '123456';
+                            if (targetPwd.length < 6) {
+                              setResetMsgMap((prev) => ({
+                                ...prev,
+                                [u.id]: '密码需不少于 6 位',
+                              }));
+                              return;
+                            }
+                            const res = await adminResetUserPassword(
+                              u.id,
+                              u.email,
+                              targetPwd
+                            );
+                            if (res.ok) {
+                              setResetPwdMap((prev) => ({ ...prev, [u.id]: '' }));
+                              setResetMsgMap((prev) => ({
+                                ...prev,
+                                [u.id]: `密码已重置为：${targetPwd}`,
+                              }));
+                            } else {
+                              setResetMsgMap((prev) => ({
+                                ...prev,
+                                [u.id]: res.error || '重置失败',
+                              }));
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand-hover flex items-center gap-1 shrink-0"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>
+                            {pwdVal.trim()
+                              ? t('重置为此密码')
+                              : t('一键重置为 123456')}
+                          </span>
+                        </button>
+                      </div>
+
+                      {u.email.toLowerCase() !== 'affbizm@gmail.com' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setUserRole(
+                                u.id,
+                                u.role === 'admin' ? 'user' : 'admin'
+                              )
+                            }
+                            className="px-2.5 py-1.5 rounded-lg border theme-border text-xs hover:border-brand"
+                          >
+                            {u.role === 'admin'
+                              ? t('设为普通成员')
+                              : t('设为管理员')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `确定要删除用户 ${u.email} 吗？`
+                                )
+                              ) {
+                                adminDeleteUser(u.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg border theme-border text-red-500 hover:border-red-500"
+                            title={t('删除用户')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

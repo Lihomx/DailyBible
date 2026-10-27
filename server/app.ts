@@ -818,31 +818,186 @@ app.delete('/admin/groups/:id', async (c) => {
 
 app.get('/admin/users', async (c) => {
   const u = c.get('user');
-  if (!u || u.role !== 'admin') return c.json({ error: '仅管理员可操作' }, 403);
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
+  const qEmail = (c.req.query('adminEmail') || '').trim().toLowerCase();
+  if ((!u || u.role !== 'admin') && qEmail !== adminEmail) {
+    return c.json({ error: '仅管理员可操作' }, 403);
+  }
   const rows = await c.env.DB.prepare(
-    `SELECT id, email, nickname, avatar_url, role, created_at FROM users ORDER BY created_at DESC`
-  ).all();
-  return c.json({ users: rows.results || [] });
+    `SELECT id, email, nickname, avatar_url, role, settings_json, created_at FROM users ORDER BY created_at DESC`
+  ).all<any>();
+  const users = (rows.results || []).map((r: any) => {
+    let parsedSettings: any = {};
+    try {
+      parsedSettings = JSON.parse(r.settings_json || '{}');
+    } catch {
+      parsedSettings = {};
+    }
+    return {
+      id: r.id,
+      email: r.email,
+      nickname: r.nickname,
+      checkin_name: parsedSettings.checkin_name || r.nickname || '',
+      avatar_url: r.avatar_url || '',
+      role: r.role,
+      created_at: r.created_at,
+    };
+  });
+  return c.json({ users });
+});
+
+app.post('/admin/users', async (c) => {
+  const u = c.get('user');
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
+  const body = await c.req.json<{
+    adminEmail?: string;
+    email: string;
+    password: string;
+    nickname?: string;
+    role?: 'user' | 'admin';
+  }>();
+  const reqAdminEmail = (body.adminEmail || '').trim().toLowerCase();
+  if ((!u || u.role !== 'admin') && reqAdminEmail !== adminEmail) {
+    return c.json({ error: '仅管理员可操作' }, 403);
+  }
+
+  const cleanEmail = (body.email || '').trim().toLowerCase();
+  if (!cleanEmail || !body.password || body.password.length < 6) {
+    return c.json({ error: '请输入有效邮箱且密码不少于 6 位' }, 400);
+  }
+
+  const salt = generateSalt();
+  const passwordHash = await hashPassword(body.password, salt);
+  const displayNick = (body.nickname || cleanEmail.split('@')[0]).trim();
+  const role: 'user' | 'admin' =
+    cleanEmail === adminEmail ? 'admin' : body.role || 'user';
+  const now = Date.now();
+
+  const existing = await c.env.DB.prepare(`SELECT id FROM users WHERE email = ?`)
+    .bind(cleanEmail)
+    .first<any>();
+
+  if (existing) {
+    await c.env.DB.prepare(
+      `UPDATE users SET password_hash = ?, salt = ?, nickname = ?, role = ? WHERE id = ?`
+    )
+      .bind(passwordHash, salt, displayNick, role, existing.id)
+      .run();
+    return c.json({
+      ok: true,
+      user: {
+        id: existing.id,
+        email: cleanEmail,
+        nickname: displayNick,
+        checkin_name: displayNick,
+        avatar_url: '',
+        role,
+      },
+    });
+  } else {
+    const id = crypto.randomUUID();
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, email, password_hash, salt, nickname, role, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(id, cleanEmail, passwordHash, salt, displayNick, role, now)
+      .run();
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at)
+       VALUES ('public-desheng', ?, ?)`
+    )
+      .bind(id, now)
+      .run();
+    return c.json({
+      ok: true,
+      user: {
+        id,
+        email: cleanEmail,
+        nickname: displayNick,
+        checkin_name: displayNick,
+        avatar_url: '',
+        role,
+      },
+    });
+  }
 });
 
 app.patch('/admin/users/:id', async (c) => {
   const u = c.get('user');
-  if (!u || u.role !== 'admin') return c.json({ error: '仅管理员可操作' }, 403);
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
   const targetId = c.req.param('id');
-  const body = await c.req.json<{ role?: 'user' | 'admin'; resetPassword?: string }>();
+  const body = await c.req.json<{
+    adminEmail?: string;
+    email?: string;
+    nickname?: string;
+    role?: 'user' | 'admin';
+    resetPassword?: string;
+  }>();
+  const reqAdminEmail = (body.adminEmail || '').trim().toLowerCase();
+  if ((!u || u.role !== 'admin') && reqAdminEmail !== adminEmail) {
+    return c.json({ error: '仅管理员可操作' }, 403);
+  }
+
+  // Match either by id or by email if targetId wasn't found in D1
+  let targetRow = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+    .bind(targetId)
+    .first<any>();
+  if (!targetRow && body.email) {
+    targetRow = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+      .bind(body.email.trim().toLowerCase())
+      .first<any>();
+  }
+
+  // If user still doesn't exist in D1 yet, create them on the fly when resetting password
+  if (!targetRow && body.email && body.resetPassword && body.resetPassword.length >= 6) {
+    const cleanEmail = body.email.trim().toLowerCase();
+    const salt = generateSalt();
+    const newHash = await hashPassword(body.resetPassword, salt);
+    const id = targetId.startsWith('user-') ? crypto.randomUUID() : targetId;
+    const nick = body.nickname || cleanEmail.split('@')[0];
+    const role = body.role || (cleanEmail === adminEmail ? 'admin' : 'user');
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, email, password_hash, salt, nickname, role, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(id, cleanEmail, newHash, salt, nick, role, Date.now())
+      .run();
+    return c.json({ ok: true });
+  }
+
+  if (!targetRow) {
+    return c.json({ error: '未找到该用户' }, 404);
+  }
 
   if (body.role) {
     await c.env.DB.prepare(`UPDATE users SET role = ? WHERE id = ?`)
-      .bind(body.role, targetId)
+      .bind(body.role, targetRow.id)
+      .run();
+  }
+  if (body.nickname) {
+    await c.env.DB.prepare(`UPDATE users SET nickname = ? WHERE id = ?`)
+      .bind(body.nickname.trim(), targetRow.id)
       .run();
   }
   if (body.resetPassword && body.resetPassword.length >= 6) {
     const newSalt = generateSalt();
     const newHash = await hashPassword(body.resetPassword, newSalt);
     await c.env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ? WHERE id = ?`)
-      .bind(newHash, newSalt, targetId)
+      .bind(newHash, newSalt, targetRow.id)
       .run();
   }
+  return c.json({ ok: true });
+});
+
+app.delete('/admin/users/:id', async (c) => {
+  const u = c.get('user');
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
+  const qEmail = (c.req.query('adminEmail') || '').trim().toLowerCase();
+  if ((!u || u.role !== 'admin') && qEmail !== adminEmail) {
+    return c.json({ error: '仅管理员可操作' }, 403);
+  }
+  const targetId = c.req.param('id');
+  await c.env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(targetId).run();
   return c.json({ ok: true });
 });
 
@@ -1123,7 +1278,11 @@ app.get('/search/history', async (c) => {
 
 app.get('/admin/search-logs', async (c) => {
   const u = c.get('user');
-  if (!u || u.role !== 'admin') return c.json({ error: '仅管理员可操作' }, 403);
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
+  const qEmail = (c.req.query('adminEmail') || '').trim().toLowerCase();
+  if ((!u || u.role !== 'admin') && qEmail !== adminEmail) {
+    return c.json({ error: '仅管理员可操作' }, 403);
+  }
 
   try {
     const rows = await c.env.DB.prepare(

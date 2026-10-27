@@ -151,7 +151,20 @@ interface UserDataState {
   deleteSermon: (sermonId: string) => Promise<void>;
 
   // Admin User Management
+  fetchAdminUsers: () => Promise<void>;
   setUserRole: (userId: string, role: 'user' | 'admin') => Promise<void>;
+  adminResetUserPassword: (
+    userId: string,
+    email: string,
+    newPassword: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  adminCreateOrUpdateUser: (input: {
+    email: string;
+    password: string;
+    nickname?: string;
+    role?: 'user' | 'admin';
+  }) => Promise<{ ok: boolean; error?: string }>;
+  adminDeleteUser: (userId: string) => Promise<void>;
 
   // Batch Copy Tray actions
   setBatchSelectMode: (enabled: boolean) => void;
@@ -749,7 +762,43 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     }
   },
 
+  fetchAdminUsers: async () => {
+    const adminEmail = get().user?.email || ADMIN_EMAIL;
+    try {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(
+        `/api/admin/users?adminEmail=${encodeURIComponent(adminEmail)}`,
+        { headers }
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { users?: UserProfile[] };
+        if (Array.isArray(data.users) && data.users.length > 0) {
+          // Merge cloud users with any local users so none are lost
+          const mergedMap = new Map<string, UserProfile>();
+          for (const u of data.users) {
+            mergedMap.set(u.email.toLowerCase(), u);
+          }
+          for (const localU of get().allUsers) {
+            const key = localU.email.toLowerCase();
+            if (!mergedMap.has(key)) {
+              mergedMap.set(key, localU);
+            }
+          }
+          const nextUsers = Array.from(mergedMap.values());
+          set({ allUsers: nextUsers });
+          persistState({ allUsers: nextUsers });
+        }
+      }
+    } catch {
+      // ignore offline
+    }
+  },
+
   setUserRole: async (userId, role) => {
+    const target = get().allUsers.find((u) => u.id === userId);
     const nextUsers = get().allUsers.map((u) =>
       u.id === userId ? { ...u, role } : u
     );
@@ -762,11 +811,121 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     persistState({ allUsers: nextUsers, user: nextUser });
 
     try {
-      await fetch(`/api/admin/users/${userId}`, {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
+        headers,
+        body: JSON.stringify({
+          role,
+          email: target?.email,
+          adminEmail: currentUser?.email || ADMIN_EMAIL,
+        }),
       });
+    } catch {
+      // ignore
+    }
+  },
+
+  adminResetUserPassword: async (userId, email, newPassword) => {
+    if (!newPassword || newPassword.length < 6) {
+      return { ok: false, error: '新密码不能少于 6 位' };
+    }
+    const currentUser = get().user;
+    const target = get().allUsers.find((u) => u.id === userId || u.email.toLowerCase() === email.toLowerCase());
+    try {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          email,
+          nickname: target?.nickname,
+          role: target?.role || 'user',
+          resetPassword: newPassword,
+          adminEmail: currentUser?.email || ADMIN_EMAIL,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        return { ok: false, error: d.error || '重置密码失败' };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: true };
+    }
+  },
+
+  adminCreateOrUpdateUser: async (input) => {
+    const cleanEmail = input.email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { ok: false, error: '请输入有效的邮箱' };
+    }
+    if (!input.password || input.password.length < 6) {
+      return { ok: false, error: '密码长度不能少于 6 位' };
+    }
+    const currentUser = get().user;
+    try {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...input,
+          email: cleanEmail,
+          adminEmail: currentUser?.email || ADMIN_EMAIL,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          const existing = [...get().allUsers];
+          const idx = existing.findIndex(
+            (u) => u.email.toLowerCase() === cleanEmail
+          );
+          if (idx >= 0) existing[idx] = data.user;
+          else existing.unshift(data.user);
+          set({ allUsers: existing });
+          persistState({ allUsers: existing });
+        }
+        return { ok: true };
+      } else {
+        const d = await res.json().catch(() => ({}));
+        return { ok: false, error: d.error || '操作失败' };
+      }
+    } catch {
+      return { ok: false, error: '网络请求失败' };
+    }
+  },
+
+  adminDeleteUser: async (userId) => {
+    const currentUser = get().user;
+    const nextUsers = get().allUsers.filter((u) => u.id !== userId);
+    set({ allUsers: nextUsers });
+    persistState({ allUsers: nextUsers });
+
+    try {
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      await fetch(
+        `/api/admin/users/${encodeURIComponent(userId)}?adminEmail=${encodeURIComponent(
+          currentUser?.email || ADMIN_EMAIL
+        )}`,
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
     } catch {
       // ignore
     }
@@ -980,8 +1139,16 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
   },
 
   fetchAdminSearchLogs: async () => {
+    const adminEmail = get().user?.email || ADMIN_EMAIL;
     try {
-      const res = await fetch('/api/admin/search-logs');
+      const token = localStorage.getItem('dailybible_token');
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(
+        `/api/admin/search-logs?adminEmail=${encodeURIComponent(adminEmail)}`,
+        { headers }
+      );
       if (res.ok) {
         const data = (await res.json()) as { logs?: SearchLogEntry[] };
         if (Array.isArray(data.logs)) {
