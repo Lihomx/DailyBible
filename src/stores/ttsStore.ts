@@ -30,7 +30,28 @@ export interface TtsState {
 }
 
 let activeUtterance: SpeechSynthesisUtterance | null = null;
+let activeAudio: HTMLAudioElement | null = null;
 let speakSessionId = 0;
+
+function stopActivePlayback() {
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // ignore
+    }
+  }
+  if (activeAudio) {
+    try {
+      activeAudio.pause();
+      activeAudio.src = '';
+    } catch {
+      // ignore
+    }
+    activeAudio = null;
+  }
+  activeUtterance = null;
+}
 
 function pickChineseVoice(): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
@@ -38,17 +59,70 @@ function pickChineseVoice(): SpeechSynthesisVoice | null {
   if (!voices || voices.length === 0) return null;
   return (
     voices.find((v) => v.lang === 'zh-CN' && v.name.includes('Natural')) ||
+    voices.find((v) => v.lang === 'zh-CN' && v.localService) ||
     voices.find((v) => v.lang === 'zh-CN') ||
-    voices.find((v) => v.lang.startsWith('zh')) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith('zh')) ||
     null
   );
 }
 
+function playCloudTtsFallback(
+  textToSpeak: string,
+  session: number,
+  get: () => TtsState,
+  set: (partial: Partial<TtsState>) => void
+) {
+  const state = get();
+  const encoded = encodeURIComponent(textToSpeak.slice(0, 180));
+  const urls = [
+    `https://dict.youdao.com/dictvoice?audio=${encoded}&le=zh`,
+    `https://fanyi.baidu.com/gettts?lan=zh&text=${encoded}&spd=5&source=web`,
+  ];
+
+  let urlIndex = 0;
+
+  const tryPlayNextUrl = () => {
+    if (session !== speakSessionId) return;
+    if (urlIndex >= urls.length) {
+      set({ isPlaying: false, isPaused: false });
+      return;
+    }
+
+    const audio = new Audio(urls[urlIndex++]);
+    audio.playbackRate = state.rate;
+    activeAudio = audio;
+
+    audio.onended = () => {
+      if (session !== speakSessionId) return;
+      const latest = get();
+      if (!latest.isPlaying || latest.isPaused) return;
+      if (latest.currentIndex + 1 < latest.verses.length) {
+        set({ currentIndex: latest.currentIndex + 1 });
+        speakCurrentVerse(get, set);
+      } else {
+        set({ isPlaying: false, isPaused: false });
+      }
+    };
+
+    audio.onerror = () => {
+      if (session !== speakSessionId) return;
+      tryPlayNextUrl();
+    };
+
+    audio.play().catch(() => {
+      if (session !== speakSessionId) return;
+      tryPlayNextUrl();
+    });
+  };
+
+  tryPlayNextUrl();
+}
+
 function speakCurrentVerse(get: () => TtsState, set: (partial: Partial<TtsState>) => void) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (typeof window === 'undefined') return;
 
   const session = ++speakSessionId;
-  window.speechSynthesis.cancel();
+  stopActivePlayback();
 
   const state = get();
   if (!state.isOpen || state.currentIndex < 0 || state.currentIndex >= state.verses.length) {
@@ -63,31 +137,73 @@ function speakCurrentVerse(get: () => TtsState, set: (partial: Partial<TtsState>
       ? `${state.bookName} 第${state.chapter}章。 ${cleanText}`
       : cleanText;
 
-  const utter = new SpeechSynthesisUtterance(textToSpeak);
-  utter.lang = 'zh-CN';
-  utter.rate = state.rate;
-  const voice = pickChineseVoice();
-  if (voice) utter.voice = voice;
-
-  utter.onend = () => {
-    if (session !== speakSessionId) return;
-    const latest = get();
-    if (!latest.isPlaying || latest.isPaused) return;
-    if (latest.currentIndex + 1 < latest.verses.length) {
-      set({ currentIndex: latest.currentIndex + 1 });
-      speakCurrentVerse(get, set);
-    } else {
-      set({ isPlaying: false, isPaused: false });
-    }
-  };
-
-  utter.onerror = () => {
-    if (session !== speakSessionId) return;
-  };
-
-  activeUtterance = utter;
   set({ isPlaying: true, isPaused: false });
-  window.speechSynthesis.speak(utter);
+
+  if (!('speechSynthesis' in window)) {
+    playCloudTtsFallback(textToSpeak, session, get, set);
+    return;
+  }
+
+  const startUtterance = () => {
+    if (session !== speakSessionId) return;
+    try {
+      window.speechSynthesis.resume();
+    } catch {
+      // ignore
+    }
+
+    const utter = new SpeechSynthesisUtterance(textToSpeak);
+    utter.lang = 'zh-CN';
+    utter.rate = state.rate;
+    const voice = pickChineseVoice();
+    if (voice) {
+      utter.voice = voice;
+    }
+
+    let started = false;
+    utter.onstart = () => {
+      started = true;
+    };
+
+    utter.onend = () => {
+      if (session !== speakSessionId) return;
+      const latest = get();
+      if (!latest.isPlaying || latest.isPaused) return;
+      if (latest.currentIndex + 1 < latest.verses.length) {
+        set({ currentIndex: latest.currentIndex + 1 });
+        speakCurrentVerse(get, set);
+      } else {
+        set({ isPlaying: false, isPaused: false });
+      }
+    };
+
+    utter.onerror = (ev) => {
+      if (session !== speakSessionId) return;
+      if (ev.error === 'canceled' || ev.error === 'interrupted') return;
+      playCloudTtsFallback(textToSpeak, session, get, set);
+    };
+
+    activeUtterance = utter;
+    window.speechSynthesis.speak(utter);
+
+    // Watchdog: if browser speechSynthesis fails to start within 1200ms (e.g. missing OS Chinese voice pack), fallback to online TTS audio
+    setTimeout(() => {
+      if (session !== speakSessionId) return;
+      const latest = get();
+      if (!latest.isPlaying || latest.isPaused) return;
+      if (!started && !window.speechSynthesis.speaking) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+        playCloudTtsFallback(textToSpeak, session, get, set);
+      }
+    }, 1200);
+  };
+
+  // Delay 40ms after cancel() to avoid Chrome/Edge Windows bug where cancel()+speak() in same tick drops utterance
+  setTimeout(startUtterance, 40);
 }
 
 export const useTtsStore = create<TtsState>((set, get) => ({
@@ -125,9 +241,7 @@ export const useTtsStore = create<TtsState>((set, get) => ({
 
   pauseReading: () => {
     speakSessionId++;
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopActivePlayback();
     set({ isPlaying: false, isPaused: true });
   },
 
@@ -178,10 +292,7 @@ export const useTtsStore = create<TtsState>((set, get) => ({
 
   stopAndClose: () => {
     speakSessionId++;
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    activeUtterance = null;
+    stopActivePlayback();
     set({ isOpen: false, isPlaying: false, isPaused: false });
   },
 }));

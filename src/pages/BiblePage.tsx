@@ -335,19 +335,31 @@ export const BiblePage: React.FC = () => {
         {/* Right: Play Audio, Fullscreen, Parallel Version, Aa Typography */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() =>
-              startReading({
-                bookId,
-                bookName: bookDisplayName,
-                chapter,
-                verses,
-                startVerseNumber: selectedVerses[0] || 1,
-              })
-            }
-            className="px-3 py-1.5 rounded-md border theme-border theme-card text-xs sm:text-sm font-medium flex items-center gap-1.5 hover:border-brand hover:text-brand transition shadow-sm"
+            onClick={() => {
+              if (ttsOpen && ttsBookId === bookId && ttsChapter === chapter && selectedVerses.length === 0) {
+                useTtsStore.getState().togglePlayPause();
+              } else {
+                startReading({
+                  bookId,
+                  bookName: bookDisplayName,
+                  chapter,
+                  verses,
+                  startVerseNumber: selectedVerses[0] || 1,
+                });
+              }
+            }}
+            className={`px-3 py-1.5 rounded-md border text-xs sm:text-sm font-medium flex items-center gap-1.5 transition shadow-sm ${
+              ttsOpen && ttsBookId === bookId && ttsChapter === chapter
+                ? 'border-brand bg-brand/10 text-brand'
+                : 'theme-border theme-card hover:border-brand hover:text-brand'
+            }`}
           >
             <Play className="w-3.5 h-3.5" />
-            <span>{t('播放')}</span>
+            <span>
+              {ttsOpen && ttsBookId === bookId && ttsChapter === chapter
+                ? t('朗读中')
+                : t('播放')}
+            </span>
           </button>
 
           <button

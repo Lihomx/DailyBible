@@ -84,7 +84,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
             {!sidebarCollapsed && (
               <span className="font-bold text-base tracking-tight whitespace-nowrap">
-                {t('微读圣经')}
+                {t('圣经')}
               </span>
             )}
           </Link>

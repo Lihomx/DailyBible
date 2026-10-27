@@ -215,10 +215,34 @@ app.post('/auth/register', async (c) => {
 app.post('/auth/login', async (c) => {
   const { email, password } = await c.req.json<{ email: string; password: string }>();
   const cleanEmail = (email || '').trim().toLowerCase();
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
 
-  const row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+  let row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
     .bind(cleanEmail)
     .first<any>();
+
+  // Auto-create default admin account on first login if not yet in D1
+  if (!row && cleanEmail === adminEmail && password && password.length >= 6) {
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(password, salt);
+    const id = 'admin-affbizm';
+    const now = Date.now();
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO users (id, email, password_hash, salt, nickname, role, created_at)
+       VALUES (?, ?, ?, ?, '教会管理员', 'admin', ?)`
+    )
+      .bind(id, cleanEmail, passwordHash, salt, now)
+      .run();
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at)
+       VALUES ('public-desheng', ?, ?)`
+    )
+      .bind(id, now)
+      .run();
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+      .bind(cleanEmail)
+      .first<any>();
+  }
 
   if (!row) {
     return c.json({ error: '账号不存在或密码错误' }, 401);
@@ -230,7 +254,6 @@ app.post('/auth/login', async (c) => {
   }
 
   // Ensure configured admin email always gets admin role
-  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
   let role: 'user' | 'admin' = row.role;
   if (cleanEmail === adminEmail && role !== 'admin') {
     role = 'admin';
