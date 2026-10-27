@@ -518,13 +518,21 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
         body: JSON.stringify({
           userId: current?.id,
           email: current?.email,
+          nickname: current?.nickname,
           currentPassword,
           newPassword,
         }),
       });
+      const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
         return { ok: false, error: d.error || '密码修改失败' };
+      }
+      if (d.token) {
+        try {
+          localStorage.setItem('dailybible_token', d.token);
+        } catch {
+          // ignore
+        }
       }
       return { ok: true };
     } catch {

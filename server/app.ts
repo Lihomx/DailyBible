@@ -446,9 +446,10 @@ app.patch('/me', async (c) => {
 
 app.post('/me/password', async (c) => {
   const u = c.get('user');
-  const { userId, email, currentPassword, newPassword } = await c.req.json<{
+  const { userId, email, nickname, newPassword } = await c.req.json<{
     userId?: string;
     email?: string;
+    nickname?: string;
     currentPassword?: string;
     newPassword?: string;
   }>();
@@ -457,8 +458,16 @@ app.post('/me/password', async (c) => {
     return c.json({ error: '新密码不少于 6 位' }, 400);
   }
 
+  const cleanEmail = (email || u?.email || '').trim().toLowerCase();
+  const adminEmail = (c.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).toLowerCase();
+
   let row: any = null;
-  if (u?.sub) {
+  if (cleanEmail) {
+    row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
+      .bind(cleanEmail)
+      .first<any>();
+  }
+  if (!row && u?.sub) {
     row = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
       .bind(u.sub)
       .first<any>();
@@ -468,28 +477,49 @@ app.post('/me/password', async (c) => {
       .bind(userId)
       .first<any>();
   }
-  if (!row && (email || u?.email)) {
-    const cleanEmail = (email || u?.email || '').trim().toLowerCase();
-    row = await c.env.DB.prepare(`SELECT * FROM users WHERE email = ?`)
-      .bind(cleanEmail)
-      .first<any>();
-  }
-  if (!row) return c.json({ error: '用户不存在，请重新登录后再试' }, 404);
-
-  if (currentPassword) {
-    const checkHash = await hashPassword(currentPassword, row.salt);
-    if (checkHash !== row.password_hash) {
-      return c.json({ error: '当前密码不正确' }, 400);
-    }
-  }
 
   const newSalt = generateSalt();
   const newHash = await hashPassword(newPassword, newSalt);
-  await c.env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ? WHERE id = ?`)
-    .bind(newHash, newSalt, row.id)
-    .run();
 
-  return c.json({ ok: true });
+  if (!row) {
+    if (!cleanEmail) {
+      return c.json({ error: '无法识别当前账号邮箱，请退出后重新登录' }, 404);
+    }
+    const id = userId && !userId.startsWith('user-') ? userId : crypto.randomUUID();
+    const displayNick = (nickname || u?.nickname || cleanEmail.split('@')[0]).trim();
+    const role: 'user' | 'admin' = cleanEmail === adminEmail ? 'admin' : 'user';
+    const now = Date.now();
+    await c.env.DB.prepare(
+      `INSERT INTO users (id, email, password_hash, salt, nickname, role, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(id, cleanEmail, newHash, newSalt, displayNick, role, now)
+      .run();
+    row = { id, email: cleanEmail, nickname: displayNick, role };
+  } else {
+    await c.env.DB.prepare(`UPDATE users SET password_hash = ?, salt = ? WHERE id = ?`)
+      .bind(newHash, newSalt, row.id)
+      .run();
+  }
+
+  const secret = c.env.JWT_SECRET || 'dailybible-default-jwt-secret-change-in-production';
+  const payload: JwtUserPayload = {
+    sub: row.id,
+    email: row.email,
+    role: row.role,
+    nickname: row.nickname,
+    exp: Date.now() + 30 * 24 * 3600 * 1000,
+  };
+  const token = await signJwt(payload, secret);
+
+  setCookie(c, 'db_token', token, {
+    httpOnly: true,
+    path: '/',
+    sameSite: 'Lax',
+    maxAge: 30 * 24 * 3600,
+  });
+
+  return c.json({ ok: true, token });
 });
 
 app.delete('/me', async (c) => {

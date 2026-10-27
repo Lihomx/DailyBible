@@ -14,6 +14,8 @@ import {
   History,
   BookOpen,
   Search,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
@@ -62,9 +64,12 @@ export const MePage: React.FC = () => {
   const [profileSaved, setProfileSaved] = useState(false);
 
   // Password change state
-  const [currPwd, setCurrPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
   const [pwdMsg, setPwdMsg] = useState('');
+  const [pwdError, setPwdError] = useState('');
+  const [pwdUpdating, setPwdUpdating] = useState(false);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,13 +125,32 @@ export const MePage: React.FC = () => {
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await changePassword(currPwd, newPwd);
+    setPwdMsg('');
+    setPwdError('');
+
+    const cleanNew = newPwd.trim();
+    const cleanConfirm = confirmPwd.trim();
+    if (cleanNew.length < 6) {
+      setPwdError(t('新密码长度不能少于 6 位'));
+      return;
+    }
+    if (cleanNew !== cleanConfirm) {
+      setPwdError(t('两次输入的新密码不一致，请检查'));
+      return;
+    }
+
+    setPwdUpdating(true);
+    const res = await changePassword('', cleanNew);
+    setPwdUpdating(false);
+
     if (res.ok) {
-      setPwdMsg(t('密码已成功更新！'));
-      setCurrPwd('');
+      setPwdMsg(
+        `密码已成功更新为：${cleanNew}（可随时用新密码跨设备登录）`
+      );
       setNewPwd('');
+      setConfirmPwd('');
     } else {
-      setPwdMsg(res.error || t('修改失败'));
+      setPwdError(res.error || t('修改失败，请稍后重试'));
     }
   };
 
@@ -426,43 +450,109 @@ export const MePage: React.FC = () => {
               className="rounded-2xl border theme-border theme-card p-6 space-y-4 flex flex-col justify-between"
             >
               <div className="space-y-4">
-                <h3 className="font-bold text-base flex items-center gap-2 border-b theme-border pb-2.5">
-                  <KeyRound className="w-4 h-4 text-brand" />
-                  <span>{t('修改登录密码')}</span>
-                </h3>
+                <div className="flex items-center justify-between border-b theme-border pb-2.5">
+                  <h3 className="font-bold text-base flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-brand" />
+                    <span>{t('修改登录密码')}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    className="text-xs theme-text-muted hover:text-brand flex items-center gap-1"
+                  >
+                    {showPwd ? (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5" />
+                        <span>{t('隐藏密码')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{t('显示明文')}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
 
                 <div className="space-y-3 text-sm">
                   <div>
                     <label className="block text-xs theme-text-muted mb-1">
-                      {t('当前密码')}
+                      {t('输入新密码（至少6位）')}
                     </label>
-                    <input
-                      type="password"
-                      value={currPwd}
-                      onChange={(e) => setCurrPwd(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3.5 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPwd ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        autoComplete="new-password"
+                        value={newPwd}
+                        onChange={(e) => {
+                          setNewPwd(e.target.value);
+                          setPwdError('');
+                          setPwdMsg('');
+                        }}
+                        placeholder={t('请输入新密码')}
+                        className="w-full px-3.5 py-2 pr-10 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPwd((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted hover:text-brand"
+                        tabIndex={-1}
+                      >
+                        {showPwd ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs theme-text-muted mb-1">
-                      {t('新密码（至少6位）')}
+                      {t('确认新密码（再次输入以防输错）')}
                     </label>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={newPwd}
-                      onChange={(e) => setNewPwd(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full px-3.5 py-2 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPwd ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        autoComplete="new-password"
+                        value={confirmPwd}
+                        onChange={(e) => {
+                          setConfirmPwd(e.target.value);
+                          setPwdError('');
+                          setPwdMsg('');
+                        }}
+                        placeholder={t('请再次输入新密码')}
+                        className="w-full px-3.5 py-2 pr-10 rounded-xl border theme-border theme-elevated outline-none focus:border-brand"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPwd((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 theme-text-muted hover:text-brand"
+                        tabIndex={-1}
+                      >
+                        {showPwd ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
+                {pwdError && (
+                  <div className="p-2.5 rounded-xl bg-red-500/15 text-red-600 text-xs font-semibold">
+                    {pwdError}
+                  </div>
+                )}
+
                 {pwdMsg && (
-                  <div className="text-xs font-medium text-emerald-600">
-                    {pwdMsg}
+                  <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{pwdMsg}</span>
                   </div>
                 )}
               </div>
@@ -483,9 +573,10 @@ export const MePage: React.FC = () => {
 
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-semibold hover:bg-brand-hover"
+                  disabled={pwdUpdating}
+                  className="px-4 py-2 rounded-xl bg-brand text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50"
                 >
-                  {t('更新密码')}
+                  {pwdUpdating ? t('正在更新...') : t('更新密码')}
                 </button>
               </div>
             </form>
