@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import {
   CalendarCheck,
@@ -9,17 +9,22 @@ import {
   Circle,
   AlertCircle,
   Lock,
+  Volume2,
 } from 'lucide-react';
 import {
   loadDeshengPlan,
   computePlanDayIndex,
   ReadingPlanData,
+  PlanDayEntry,
 } from '../lib/plan';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
+import { useTtsStore } from '../stores/ttsStore';
 
 export const PlanPage: React.FC = () => {
+  const navigate = useNavigate();
   const { script, t } = useSettingsStore();
+  const { startPlanDayLoop } = useTtsStore();
   const {
     user,
     activeGroupId,
@@ -419,12 +424,29 @@ export const PlanPage: React.FC = () => {
                               <span className="truncate">{label}</span>
                             </button>
 
-                            <Link
-                              to={`/bible/${seg.bookId}.${seg.chapterStart}`}
-                              className="text-brand hover:underline ml-2 shrink-0"
-                            >
-                              {t('读经')}
-                            </Link>
+                            <div className="flex items-center gap-2 ml-2 shrink-0">
+                              <button
+                                onClick={async () => {
+                                  const { targetBookId, targetChapter } =
+                                    await startPlanDayLoop({
+                                      dayEntry: d as PlanDayEntry,
+                                      startPart: partKey,
+                                    });
+                                  navigate(`/bible/${targetBookId}.${targetChapter}`);
+                                }}
+                                title={t('循环朗读该日得胜计划经文')}
+                                className="text-brand hover:underline flex items-center gap-0.5 font-medium"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span>{t('听经')}</span>
+                              </button>
+                              <Link
+                                to={`/bible/${seg.bookId}.${seg.chapterStart}`}
+                                className="theme-text-muted hover:text-brand hover:underline"
+                              >
+                                {t('读经')}
+                              </Link>
+                            </div>
                           </div>
                         );
                       })}

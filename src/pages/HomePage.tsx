@@ -41,7 +41,7 @@ export const HomePage: React.FC = () => {
     markAllDayPartsDone,
     sermons,
   } = useUserDataStore();
-  const { startReading } = useTtsStore();
+  const { startPlanDayLoop } = useTtsStore();
 
   const [plan, setPlan] = useState<ReadingPlanData | null>(null);
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(1);
@@ -152,18 +152,19 @@ export const HomePage: React.FC = () => {
   };
 
   const handleListenSegment = async (seg: PlanReadingSegment) => {
-    const chVerses = await loadChapterVerses(
-      seg.bookId,
-      seg.chapterStart,
-      script
-    );
-    startReading({
-      bookId: seg.bookId,
-      bookName: script === 'trad' ? seg.bookNameTrad : seg.bookNameSimp,
-      chapter: seg.chapterStart,
-      verses: chVerses,
-      startVerseNumber: 1,
+    const { targetBookId, targetChapter } = await startPlanDayLoop({
+      dayEntry,
+      startPart: seg.part,
     });
+    navigate(`/bible/${targetBookId}.${targetChapter}`);
+  };
+
+  const handlePlayAllTodayPlan = async () => {
+    const { targetBookId, targetChapter } = await startPlanDayLoop({
+      dayEntry,
+      startPart: 'ps',
+    });
+    navigate(`/bible/${targetBookId}.${targetChapter}`);
   };
 
   const segments: Array<{
@@ -259,8 +260,16 @@ export const HomePage: React.FC = () => {
             </h1>
           </div>
 
-          {/* Day switcher & One-click complete */}
-          <div className="flex items-center gap-2">
+          {/* Day switcher & Play All Today Loop */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handlePlayAllTodayPlan}
+              className="px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-semibold hover:bg-brand-hover transition flex items-center gap-1.5 shadow-sm"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>{t('循环播放今日经文')}</span>
+            </button>
+
             <button
               onClick={() =>
                 setSelectedDayIndex((d) => (d > 1 ? d - 1 : 365))

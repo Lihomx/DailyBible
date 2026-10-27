@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { VerseItem, loadChapterVerses } from '../lib/bible';
-import { BIBLE_BOOKS, BOOK_BY_ID, getBookName } from '../data/books';
+import { BIBLE_BOOKS, BOOK_BY_ID, getBookName, getBookAbbr } from '../data/books';
 import { useSettingsStore } from './settingsStore';
+import { PlanDayEntry, PlanReadingSegment } from '../lib/plan';
 
 export type AudioEditionId = 42 | 2; // 42 = 和合本100周年朗读版, 2 = 和合本（新旧约）磐石聆听版
 
@@ -11,10 +12,58 @@ export interface LyricCue {
   end: number;   // seconds
 }
 
+export interface PlanQueueChapterItem {
+  part: 'ps' | 'nt' | 'ot';
+  partTag: string;
+  bookId: string;
+  chapter: number;
+  verseStart?: number;
+  verseEnd?: number;
+  labelSimp: string;
+  labelTrad: string;
+}
+
 export const AUDIO_EDITIONS: Array<{ id: AudioEditionId; label: string; shortLabel: string }> = [
   { id: 42, label: '和合本100周年朗读版', shortLabel: '100周年版' },
   { id: 2, label: '和合本(新旧约)磐石聆听版', shortLabel: '磐石聆听版' },
 ];
+
+export function buildPlanDayAudioQueue(dayEntry: PlanDayEntry): PlanQueueChapterItem[] {
+  const queue: PlanQueueChapterItem[] = [];
+  const segList: Array<{ part: 'ps' | 'nt' | 'ot'; tag: string; seg: PlanReadingSegment }> = [
+    { part: 'ps', tag: '诗篇/智慧', seg: dayEntry.readings.ps },
+    { part: 'nt', tag: '新约', seg: dayEntry.readings.nt },
+    { part: 'ot', tag: '旧约', seg: dayEntry.readings.ot },
+  ];
+
+  for (const { part, tag, seg } of segList) {
+    let vStart: number | undefined;
+    let vEnd: number | undefined;
+    if (seg.verseSpec) {
+      const nums = seg.verseSpec.split('-').map((n) => parseInt(n, 10));
+      if (!isNaN(nums[0])) vStart = nums[0];
+      if (!isNaN(nums[1])) vEnd = nums[1];
+    }
+
+    for (let ch = seg.chapterStart; ch <= seg.chapterEnd; ch++) {
+      const abbrS = getBookAbbr(seg.bookId, 'simp');
+      const abbrT = getBookAbbr(seg.bookId, 'trad');
+      const suffix = seg.verseSpec ? `:${seg.verseSpec}` : '章';
+      queue.push({
+        part,
+        partTag: tag,
+        bookId: seg.bookId,
+        chapter: ch,
+        verseStart: vStart,
+        verseEnd: vEnd,
+        labelSimp: `${abbrS}${ch}${suffix}`,
+        labelTrad: `${abbrT}${ch}${suffix}`,
+      });
+    }
+  }
+
+  return queue;
+}
 
 export interface TtsState {
   isOpen: boolean;
@@ -29,7 +78,13 @@ export interface TtsState {
   currentIndex: number; // index into verses array
   rate: number; // 0.75 .. 2.0
   editionId: AudioEditionId; // 42 (default) or 2
-  autoNextChapter: boolean;  // default true
+  autoNextChapter: boolean;  // used when playbackMode === 'normal'
+  playbackMode: 'normal' | 'plan_loop';
+  planDayTitle: string;
+  planQueue: PlanQueueChapterItem[];
+  planQueueIndex: number;
+  lyricFocusMode: boolean;     // Mode 1: Apple-Music style verse focus in Bible reader
+  immersiveCardOpen: boolean;  // Mode 4: Fullscreen big-character listening card
   currentTime: number;
   duration: number;
   cues: LyricCue[];
@@ -41,6 +96,12 @@ export interface TtsState {
     verses: VerseItem[];
     startVerseNumber?: number;
   }) => void;
+  startPlanDayLoop: (params: {
+    dayEntry: PlanDayEntry;
+    startPart?: 'ps' | 'nt' | 'ot';
+  }) => Promise<{ targetBookId: string; targetChapter: number }>;
+  jumpToPlanQueueItem: (queueIndex: number) => Promise<void>;
+  exitPlanLoopMode: () => void;
   pauseReading: () => void;
   resumeReading: () => void;
   togglePlayPause: () => void;
@@ -51,14 +112,21 @@ export interface TtsState {
   setRate: (rate: number) => void;
   setEditionId: (editionId: AudioEditionId) => void;
   setAutoNextChapter: (enabled: boolean) => void;
+  setLyricFocusMode: (enabled: boolean) => void;
+  setImmersiveCardOpen: (open: boolean) => void;
   stopAndClose: () => void;
 }
 
-const PREF_KEY = 'dailybible_audio_prefs_v1';
+const PREF_KEY = 'dailybible_audio_prefs_v2';
 
-function loadAudioPrefs(): { editionId: AudioEditionId; autoNextChapter: boolean; rate: number } {
+function loadAudioPrefs(): {
+  editionId: AudioEditionId;
+  autoNextChapter: boolean;
+  rate: number;
+  lyricFocusMode: boolean;
+} {
   if (typeof window === 'undefined') {
-    return { editionId: 42, autoNextChapter: true, rate: 1.0 };
+    return { editionId: 42, autoNextChapter: true, rate: 1.0, lyricFocusMode: true };
   }
   try {
     const raw = localStorage.getItem(PREF_KEY);
@@ -68,15 +136,23 @@ function loadAudioPrefs(): { editionId: AudioEditionId; autoNextChapter: boolean
         editionId: p.editionId === 2 ? 2 : 42,
         autoNextChapter: p.autoNextChapter !== undefined ? Boolean(p.autoNextChapter) : true,
         rate: typeof p.rate === 'number' ? p.rate : 1.0,
+        lyricFocusMode: p.lyricFocusMode !== undefined ? Boolean(p.lyricFocusMode) : true,
       };
     }
   } catch {
     // ignore
   }
-  return { editionId: 42, autoNextChapter: true, rate: 1.0 };
+  return { editionId: 42, autoNextChapter: true, rate: 1.0, lyricFocusMode: true };
 }
 
-function saveAudioPrefs(patch: Partial<{ editionId: AudioEditionId; autoNextChapter: boolean; rate: number }>) {
+function saveAudioPrefs(
+  patch: Partial<{
+    editionId: AudioEditionId;
+    autoNextChapter: boolean;
+    rate: number;
+    lyricFocusMode: boolean;
+  }>
+) {
   if (typeof window === 'undefined') return;
   try {
     const curr = loadAudioPrefs();
@@ -125,10 +201,105 @@ function cleanupAudioElement() {
   }
 }
 
+function syncBrowserUrlToChapter(bookId: string, chapter: number) {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/bible')) {
+    const targetPath = `/bible/${bookId}.${chapter}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({}, '', targetPath);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }
+}
+
+async function advanceOnChapterEnded(
+  session: number,
+  get: () => TtsState,
+  set: (partial: Partial<TtsState>) => void
+) {
+  if (session !== loadSessionId) return;
+  const latest = get();
+
+  // Case 1: Victorious Reading Plan Loop Mode -> advance to next chapter in planQueue and loop around
+  if (latest.playbackMode === 'plan_loop' && latest.planQueue.length > 0) {
+    const nextQueueIdx = (latest.planQueueIndex + 1) % latest.planQueue.length;
+    const targetItem = latest.planQueue[nextQueueIdx];
+    const script = useSettingsStore.getState().script;
+    const nextBookName = getBookName(targetItem.bookId, script);
+    let nextVerses = await loadChapterVerses(targetItem.bookId, targetItem.chapter, script);
+    if (session !== loadSessionId) return;
+
+    if (targetItem.verseStart !== undefined) {
+      nextVerses = nextVerses.filter(
+        (v) =>
+          v.v >= (targetItem.verseStart || 1) &&
+          (targetItem.verseEnd === undefined || v.v <= targetItem.verseEnd)
+      );
+    }
+
+    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
+
+    set({
+      planQueueIndex: nextQueueIdx,
+      bookId: targetItem.bookId,
+      bookName: nextBookName,
+      chapter: targetItem.chapter,
+      verses: nextVerses,
+      currentIndex: 0,
+    });
+
+    loadAndPlayChapterAudio(
+      get,
+      set,
+      targetItem.verseStart || 1,
+      targetItem.verseEnd
+    );
+    return;
+  }
+
+  // Case 2: Normal Bible Reader Mode
+  if (!latest.autoNextChapter) {
+    set({ isPlaying: false, isPaused: false, currentTime: 0 });
+    return;
+  }
+
+  const currBookMeta = BOOK_BY_ID[latest.bookId] || BOOK_BY_ID['gen'];
+  let nextBookId = latest.bookId;
+  let nextChapter = latest.chapter + 1;
+
+  if (nextChapter > currBookMeta.chapters) {
+    if (currBookMeta.index < 66) {
+      const nextBook = BIBLE_BOOKS[currBookMeta.index];
+      nextBookId = nextBook.id;
+      nextChapter = 1;
+    } else {
+      set({ isPlaying: false, isPaused: false });
+      return;
+    }
+  }
+
+  const script = useSettingsStore.getState().script;
+  const nextBookName = getBookName(nextBookId, script);
+  const nextVerses = await loadChapterVerses(nextBookId, nextChapter, script);
+  if (session !== loadSessionId) return;
+
+  syncBrowserUrlToChapter(nextBookId, nextChapter);
+
+  set({
+    bookId: nextBookId,
+    bookName: nextBookName,
+    chapter: nextChapter,
+    verses: nextVerses,
+    currentIndex: 0,
+  });
+
+  loadAndPlayChapterAudio(get, set, 1);
+}
+
 async function loadAndPlayChapterAudio(
   get: () => TtsState,
   set: (partial: Partial<TtsState>) => void,
-  targetStartVerseNumber?: number
+  targetStartVerseNumber?: number,
+  targetEndVerseNumber?: number
 ) {
   if (typeof window === 'undefined') return;
 
@@ -186,6 +357,15 @@ async function loadAndPlayChapterAudio(
       }
     }
 
+    // If a specific verseEnd is set (e.g., Psalm 119 partial segment), find end timestamp
+    let segmentEndTime: number | undefined;
+    if (targetEndVerseNumber !== undefined && cues.length > 0) {
+      const endCue = cues.find((c) => c.verse === targetEndVerseNumber);
+      if (endCue) {
+        segmentEndTime = endCue.end;
+      }
+    }
+
     audio.onloadedmetadata = () => {
       if (session !== loadSessionId) return;
       set({
@@ -207,9 +387,15 @@ async function loadAndPlayChapterAudio(
       const dur = audio.duration || 0;
       const latest = get();
 
+      // If playing a partial chapter in Plan Loop mode (e.g. Psalm 119:1-24) and reached segmentEndTime
+      if (segmentEndTime !== undefined && t >= segmentEndTime) {
+        audio.pause();
+        advanceOnChapterEnded(session, get, set);
+        return;
+      }
+
       let nextIdx = latest.currentIndex;
       if (cues.length > 0) {
-        // Find matching cue for current timestamp
         const matchedCue = cues.find((c) => c.verse >= 1 && t >= c.start && t < c.end);
         if (matchedCue) {
           const vIdx = latest.verses.findIndex((v) => v.v === matchedCue.verse);
@@ -244,51 +430,8 @@ async function loadAndPlayChapterAudio(
       }
     };
 
-    audio.onended = async () => {
-      if (session !== loadSessionId) return;
-      const latest = get();
-      if (!latest.autoNextChapter) {
-        set({ isPlaying: false, isPaused: false, currentTime: 0 });
-        return;
-      }
-
-      // Auto advance to next chapter
-      const currBookMeta = BOOK_BY_ID[latest.bookId] || BOOK_BY_ID['gen'];
-      let nextBookId = latest.bookId;
-      let nextChapter = latest.chapter + 1;
-
-      if (nextChapter > currBookMeta.chapters) {
-        if (currBookMeta.index < 66) {
-          const nextBook = BIBLE_BOOKS[currBookMeta.index];
-          nextBookId = nextBook.id;
-          nextChapter = 1;
-        } else {
-          // End of Revelation 22
-          set({ isPlaying: false, isPaused: false });
-          return;
-        }
-      }
-
-      const script = useSettingsStore.getState().script;
-      const nextBookName = getBookName(nextBookId, script);
-      const nextVerses = await loadChapterVerses(nextBookId, nextChapter, script);
-      if (session !== loadSessionId) return;
-
-      // Also navigate URL if currently on Bible reader page
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/bible')) {
-        window.history.pushState({}, '', `/bible/${nextBookId}.${nextChapter}`);
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-
-      set({
-        bookId: nextBookId,
-        bookName: nextBookName,
-        chapter: nextChapter,
-        verses: nextVerses,
-        currentIndex: 0,
-      });
-
-      loadAndPlayChapterAudio(get, set, 1);
+    audio.onended = () => {
+      advanceOnChapterEnded(session, get, set);
     };
 
     audio.onerror = () => {
@@ -328,6 +471,12 @@ export const useTtsStore = create<TtsState>((set, get) => ({
   rate: initialPrefs.rate,
   editionId: initialPrefs.editionId,
   autoNextChapter: initialPrefs.autoNextChapter,
+  playbackMode: 'normal',
+  planDayTitle: '',
+  planQueue: [],
+  planQueueIndex: 0,
+  lyricFocusMode: initialPrefs.lyricFocusMode,
+  immersiveCardOpen: false,
   currentTime: 0,
   duration: 0,
   cues: [],
@@ -340,6 +489,13 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       if (foundIdx >= 0) startIdx = foundIdx;
     }
 
+    // Check if the user is starting a chapter that belongs to the currently active planQueue
+    const s = get();
+    const matchInPlan =
+      s.playbackMode === 'plan_loop'
+        ? s.planQueue.findIndex((q) => q.bookId === bookId && q.chapter === chapter)
+        : -1;
+
     set({
       isOpen: true,
       bookId,
@@ -347,9 +503,94 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       chapter,
       verses,
       currentIndex: startIdx,
+      playbackMode: matchInPlan >= 0 ? 'plan_loop' : 'normal',
+      planQueueIndex: matchInPlan >= 0 ? matchInPlan : 0,
     });
 
     loadAndPlayChapterAudio(get, set, verses[startIdx]?.v || 1);
+  },
+
+  startPlanDayLoop: async ({ dayEntry, startPart = 'ps' }) => {
+    const queue = buildPlanDayAudioQueue(dayEntry);
+    const startIdx = Math.max(
+      0,
+      queue.findIndex((q) => q.part === startPart)
+    );
+    const firstItem = queue[startIdx] || queue[0];
+    const script = useSettingsStore.getState().script;
+    const bookName = getBookName(firstItem.bookId, script);
+
+    let verses = await loadChapterVerses(firstItem.bookId, firstItem.chapter, script);
+    if (firstItem.verseStart !== undefined) {
+      verses = verses.filter(
+        (v) =>
+          v.v >= (firstItem.verseStart || 1) &&
+          (firstItem.verseEnd === undefined || v.v <= firstItem.verseEnd)
+      );
+    }
+
+    set({
+      isOpen: true,
+      playbackMode: 'plan_loop',
+      planDayTitle: `${dayEntry.month}月${dayEntry.day}日 · 得胜计划第${dayEntry.dayIndex}天`,
+      planQueue: queue,
+      planQueueIndex: startIdx,
+      bookId: firstItem.bookId,
+      bookName,
+      chapter: firstItem.chapter,
+      verses,
+      currentIndex: 0,
+    });
+
+    loadAndPlayChapterAudio(
+      get,
+      set,
+      firstItem.verseStart || 1,
+      firstItem.verseEnd
+    );
+
+    return {
+      targetBookId: firstItem.bookId,
+      targetChapter: firstItem.chapter,
+    };
+  },
+
+  jumpToPlanQueueItem: async (queueIndex) => {
+    const s = get();
+    if (queueIndex < 0 || queueIndex >= s.planQueue.length) return;
+    const targetItem = s.planQueue[queueIndex];
+    const script = useSettingsStore.getState().script;
+    const bookName = getBookName(targetItem.bookId, script);
+    let verses = await loadChapterVerses(targetItem.bookId, targetItem.chapter, script);
+    if (targetItem.verseStart !== undefined) {
+      verses = verses.filter(
+        (v) =>
+          v.v >= (targetItem.verseStart || 1) &&
+          (targetItem.verseEnd === undefined || v.v <= targetItem.verseEnd)
+      );
+    }
+
+    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
+
+    set({
+      planQueueIndex: queueIndex,
+      bookId: targetItem.bookId,
+      bookName,
+      chapter: targetItem.chapter,
+      verses,
+      currentIndex: 0,
+    });
+
+    loadAndPlayChapterAudio(
+      get,
+      set,
+      targetItem.verseStart || 1,
+      targetItem.verseEnd
+    );
+  },
+
+  exitPlanLoopMode: () => {
+    set({ playbackMode: 'normal', planQueue: [], planQueueIndex: 0 });
   },
 
   pauseReading: () => {
@@ -453,13 +694,29 @@ export const useTtsStore = create<TtsState>((set, get) => ({
     saveAudioPrefs({ editionId });
     if (s.isOpen) {
       const currentVerseNum = s.verses[s.currentIndex]?.v || 1;
-      loadAndPlayChapterAudio(get, set, currentVerseNum);
+      const activePlanItem =
+        s.playbackMode === 'plan_loop' ? s.planQueue[s.planQueueIndex] : undefined;
+      loadAndPlayChapterAudio(
+        get,
+        set,
+        currentVerseNum,
+        activePlanItem?.verseEnd
+      );
     }
   },
 
   setAutoNextChapter: (enabled) => {
     set({ autoNextChapter: enabled });
     saveAudioPrefs({ autoNextChapter: enabled });
+  },
+
+  setLyricFocusMode: (enabled) => {
+    set({ lyricFocusMode: enabled });
+    saveAudioPrefs({ lyricFocusMode: enabled });
+  },
+
+  setImmersiveCardOpen: (open) => {
+    set({ immersiveCardOpen: open });
   },
 
   stopAndClose: () => {
@@ -471,6 +728,7 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       isPaused: false,
       isLoadingAudio: false,
       audioError: null,
+      immersiveCardOpen: false,
       currentTime: 0,
       duration: 0,
     });

@@ -16,6 +16,8 @@ import {
   Volume2,
   Check,
   X,
+  Repeat,
+  Sparkles,
 } from 'lucide-react';
 import { BIBLE_BOOKS, BOOK_BY_ID, getBookName } from '../data/books';
 import { loadChapterVerses, VerseItem } from '../lib/bible';
@@ -91,7 +93,16 @@ export const BiblePage: React.FC = () => {
     chapter: ttsChapter,
     currentIndex: ttsIndex,
     verses: ttsVerses,
+    playbackMode,
+    planDayTitle,
+    planQueue,
+    planQueueIndex,
+    lyricFocusMode,
     startReading,
+    jumpToPlanQueueItem,
+    jumpToVerseIndex,
+    setImmersiveCardOpen,
+    exitPlanLoopMode,
   } = useTtsStore();
 
   const [verses, setVerses] = useState<VerseItem[]>([]);
@@ -301,10 +312,59 @@ export const BiblePage: React.FC = () => {
 
   const bookDisplayName = getBookName(bookId, script);
 
+  const isThisChapterPlaying =
+    ttsOpen && ttsBookId === bookId && ttsChapter === chapter;
+
   return (
     <div className="relative min-h-[calc(100vh-3.5rem)] flex flex-col items-center">
+      {/* Victorious Plan Loop Top Capsule Bar (when started from Plan / Home) */}
+      {ttsOpen && playbackMode === 'plan_loop' && planQueue.length > 0 && (
+        <div className="w-full max-w-4xl px-4 sm:px-8 pt-3">
+          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                <Repeat className="w-3.5 h-3.5" />
+                <span>{t(planDayTitle || '今日得胜计划循环中')}:</span>
+              </span>
+              {planQueue.map((item, idx) => {
+                const active = idx === planQueueIndex;
+                return (
+                  <button
+                    key={`${item.part}-${item.bookId}-${item.chapter}`}
+                    onClick={() => jumpToPlanQueueItem(idx)}
+                    className={`px-2.5 py-1 rounded-lg font-medium shrink-0 transition ${
+                      active
+                        ? 'bg-emerald-600 text-white shadow-sm font-bold'
+                        : 'theme-card border theme-border opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    {script === 'trad' ? item.labelTrad : item.labelSimp}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => navigate('/')}
+                className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition"
+              >
+                {t('返回打卡')}
+              </button>
+              <button
+                onClick={exitPlanLoopMode}
+                title={t('退出计划循环，切换为普通按章连播')}
+                className="p-1 theme-text-muted hover:text-current"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Reader Action Bar (exact match to wd.bible screenshot) */}
-      <div className="w-full max-w-4xl px-4 sm:px-8 pt-6 pb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="w-full max-w-4xl px-4 sm:px-8 pt-4 pb-4 flex flex-wrap items-center justify-between gap-3">
         {/* Left: Book/Chapter Selector + Version Selector */}
         <div className="flex items-center gap-2.5">
           <button
@@ -361,6 +421,17 @@ export const BiblePage: React.FC = () => {
                 : t('播放')}
             </span>
           </button>
+
+          {isThisChapterPlaying && (
+            <button
+              onClick={() => setImmersiveCardOpen(true)}
+              title={t('打开全屏大字听经卡片 (模式4)')}
+              className="px-2.5 py-1.5 rounded-md border border-brand/50 bg-brand/10 text-brand text-xs sm:text-sm font-medium flex items-center gap-1 transition shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{t('大字听经')}</span>
+            </button>
+          )}
 
           <button
             onClick={toggleFullScreen}
@@ -604,11 +675,71 @@ export const BiblePage: React.FC = () => {
 
       {/* Main Scripture Reading Container */}
       <div
-        className={`w-full max-w-3xl px-5 sm:px-10 pb-24 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
+        className={`w-full max-w-3xl px-4 sm:px-10 pb-36 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
       >
         {loading ? (
           <div className="py-20 text-center theme-text-muted text-sm">
             {t('正在加载经文...')}
+          </div>
+        ) : isThisChapterPlaying && lyricFocusMode && !parallelMode ? (
+          /* Mode 1: Apple-Music Style Lyric Focus Mode when Audio is Playing */
+          <div className="space-y-3">
+            {verses.map((v, idx) => {
+              const hlKey = `${bookId}.${chapter}.${v.v}`;
+              const hl = highlights[hlKey];
+              const isSelected = selectedVerses.includes(v.v);
+              const isSpeaking = activeTtsVerseNum === v.v;
+              const hasNote = chapterNotes.some(
+                (n) => v.v >= n.verse_start && v.v <= n.verse_end
+              );
+
+              return (
+                <div key={`${v.v}-${idx}`} id={`verse-${v.v}`} className="space-y-1.5">
+                  {v.h && (
+                    <h2 className="text-lg sm:text-xl font-bold pt-3 pb-1 text-brand">
+                      {v.h}
+                    </h2>
+                  )}
+                  <div
+                    onClick={() => {
+                      const ttsIdx = ttsVerses.findIndex((tv) => tv.v === v.v);
+                      if (ttsIdx >= 0) {
+                        jumpToVerseIndex(ttsIdx);
+                      } else {
+                        toggleSelectVerse(v.v);
+                      }
+                    }}
+                    className={`p-3.5 sm:p-4 rounded-2xl cursor-pointer transition-all duration-300 ${
+                      isSpeaking
+                        ? 'border-l-4 border-brand bg-brand/10 dark:bg-brand/15 shadow-md scale-[1.01] font-semibold opacity-100'
+                        : 'opacity-55 hover:opacity-90 border border-transparent'
+                    } ${hl ? `hl-${hl.color}` : ''} ${
+                      isSelected ? 'ring-2 ring-brand' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {showVerseNumbers && (
+                        <span
+                          className={`text-xs font-bold mt-1 shrink-0 px-1.5 py-0.5 rounded ${
+                            isSpeaking
+                              ? 'bg-brand text-white'
+                              : 'text-blue-500 bg-blue-500/10'
+                          }`}
+                        >
+                          {v.v}
+                        </span>
+                      )}
+                      <span className={isSpeaking ? 'text-[1.08em]' : ''}>
+                        {v.t.replace(/\u3000/g, ' ')}
+                      </span>
+                      {hasNote && (
+                        <StickyNote className="w-3.5 h-3.5 text-brand shrink-0 mt-1" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : readingLayout === 'paragraph' && !parallelMode ? (
           /* Paragraph Flow Mode (matches uploaded wd.bible screenshot 1) */
