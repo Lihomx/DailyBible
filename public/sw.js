@@ -1,10 +1,10 @@
-const CACHE_NAME = 'dailybible-pwa-v1';
+const CACHE_NAME = 'dailybible-pwa-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/favicon.svg',
-  '/data/plans/desheng.json',
+  '/data/plans/desheng.json?v=20261104',
 ];
 
 self.addEventListener('install', (event) => {
@@ -38,8 +38,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) return;
 
-  // Cache-first for static Bible & Plan JSONs, Network-first fallback to cache for HTML/assets
-  if (url.pathname.startsWith('/data/') || url.pathname.startsWith('/assets/')) {
+  // Cache-first ONLY for immutable Bible book JSONs (/data/cuv/) and hashed /assets/
+  if (url.pathname.startsWith('/data/cuv/') || url.pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

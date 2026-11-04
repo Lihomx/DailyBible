@@ -45,7 +45,9 @@ let cachedPlan: ReadingPlanData | null = null;
 
 export async function loadDeshengPlan(): Promise<ReadingPlanData> {
   if (cachedPlan) return cachedPlan;
-  const res = await fetch('/data/plans/desheng.json');
+  const res = await fetch('/data/plans/desheng.json?v=20261104', {
+    cache: 'no-cache',
+  });
   if (!res.ok) {
     throw new Error('无法加载得胜读经计划数据');
   }
