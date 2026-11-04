@@ -139,6 +139,92 @@ export async function loadFullBibleBundle(script: 'simp' | 'trad'): Promise<Full
   return promise;
 }
 
+export interface OfflineBibleStatus {
+  cunps: boolean; // Simp downloaded
+  cunpt: boolean; // Trad downloaded
+  cunpsSize: number; // approximate bytes
+  cunptSize: number;
+}
+
+/**
+ * Check which Bible bundles are currently stored in IndexedDB
+ */
+export async function checkOfflineBibleStatus(): Promise<OfflineBibleStatus> {
+  let cunps = false;
+  let cunpt = false;
+  let cunpsSize = 0;
+  let cunptSize = 0;
+
+  try {
+    const sBundle = await idbGet<FullBibleBundle>('bible_bundle_cunps_v1');
+    if (sBundle && Object.keys(sBundle).length >= 66) {
+      cunps = true;
+      cunpsSize = 4.3 * 1024 * 1024; // ~4.3MB
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    const tBundle = await idbGet<FullBibleBundle>('bible_bundle_cunpt_v1');
+    if (tBundle && Object.keys(tBundle).length >= 66) {
+      cunpt = true;
+      cunptSize = 4.4 * 1024 * 1024; // ~4.4MB
+    }
+  } catch {
+    // ignore
+  }
+
+  return { cunps, cunpt, cunpsSize, cunptSize };
+}
+
+/**
+ * Download a Bible bundle with progress callback (0..100)
+ */
+export async function downloadBibleBundleWithProgress(
+  script: 'simp' | 'trad',
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  const ver = getVersionCode(script);
+  if (onProgress) onProgress(10);
+
+  const res = await fetch(`/data/bible/${ver}/_all.json`);
+  if (!res.ok) {
+    throw new Error(`下载圣经数据包失败 (${ver})`);
+  }
+
+  if (onProgress) onProgress(45);
+
+  const bundle = (await res.json()) as FullBibleBundle;
+  memoryBundleCache[ver] = bundle;
+
+  if (onProgress) onProgress(75);
+
+  await idbSet(`bible_bundle_${ver}_v1`, bundle);
+
+  if (onProgress) onProgress(100);
+}
+
+/**
+ * Clear cached Bible bundle from IndexedDB
+ */
+export async function clearOfflineBibleBundle(script?: 'simp' | 'trad'): Promise<void> {
+  const { del: idbDel } = await import('idb-keyval');
+  if (!script) {
+    delete memoryBundleCache['cunps'];
+    delete memoryBundleCache['cunpt'];
+    delete bundlePromiseCache['cunps'];
+    delete bundlePromiseCache['cunpt'];
+    await idbDel('bible_bundle_cunps_v1');
+    await idbDel('bible_bundle_cunpt_v1');
+  } else {
+    const ver = getVersionCode(script);
+    delete memoryBundleCache[ver];
+    delete bundlePromiseCache[ver];
+    await idbDel(`bible_bundle_${ver}_v1`);
+  }
+}
+
 /**
  * Preload full Bible bundle in the background after initial page render for offline availability.
  */

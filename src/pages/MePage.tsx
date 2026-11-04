@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
+import { OfflineSyncCard } from '../components/OfflineSyncCard';
 
 function formatTimestamp(ts: number | null | undefined): string {
   if (!ts) return '—';
@@ -583,6 +584,9 @@ export const MePage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Offline Bible Storage & Multi-Device Synchronization Card */}
+      <OfflineSyncCard />
 
       {/* User's Personal Search & Opened Verses History Card */}
       <div className="rounded-2xl border theme-border theme-card p-6 space-y-4">

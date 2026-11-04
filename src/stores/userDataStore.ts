@@ -578,7 +578,15 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
 
     set({ progressMap: nextMap });
     persistState({ progressMap: nextMap });
-    get().syncWithCloud().catch(() => {});
+
+    // Track offline mutation
+    import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+      useOfflineSyncStore.getState().enqueueMutation({
+        type: 'progress',
+        payload: { groupId, dayIndex, part, nextParts },
+      });
+      useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+    });
 
     return { newlyCompletedDay: !wasAllDone && isNowAllDone };
   },
@@ -597,7 +605,15 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
 
     set({ progressMap: nextMap });
     persistState({ progressMap: nextMap });
-    get().syncWithCloud().catch(() => {});
+
+    // Track offline mutation
+    import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+      useOfflineSyncStore.getState().enqueueMutation({
+        type: 'progress',
+        payload: { groupId, dayIndex, part: 'all', nextParts },
+      });
+      useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+    });
 
     return { newlyCompletedDay: !wasAllDone };
   },
@@ -699,7 +715,14 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
 
     set({ highlights: nextHighlights });
     persistState({ highlights: nextHighlights });
-    get().syncWithCloud().catch(() => {});
+
+    import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+      useOfflineSyncStore.getState().enqueueMutation({
+        type: 'highlight',
+        payload: { book, chapter, verse, color },
+      });
+      useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+    });
   },
 
   saveNote: (input) => {
@@ -716,7 +739,14 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
         };
         set({ notes: existing });
         persistState({ notes: existing });
-        get().syncWithCloud().catch(() => {});
+
+        import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+          useOfflineSyncStore.getState().enqueueMutation({
+            type: 'note',
+            payload: existing[idx],
+          });
+          useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+        });
         return;
       }
     }
@@ -735,14 +765,28 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     const nextNotes = [newNote, ...existing];
     set({ notes: nextNotes });
     persistState({ notes: nextNotes });
-    get().syncWithCloud().catch(() => {});
+
+    import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+      useOfflineSyncStore.getState().enqueueMutation({
+        type: 'note',
+        payload: newNote,
+      });
+      useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+    });
   },
 
   deleteNote: (noteId) => {
     const nextNotes = get().notes.filter((n) => n.id !== noteId);
     set({ notes: nextNotes });
     persistState({ notes: nextNotes });
-    get().syncWithCloud().catch(() => {});
+
+    import('./offlineSyncStore').then(({ useOfflineSyncStore }) => {
+      useOfflineSyncStore.getState().enqueueMutation({
+        type: 'note',
+        payload: { id: noteId, deleted: 1 },
+      });
+      useOfflineSyncStore.getState().triggerSyncQueue(() => get().syncWithCloud()).catch(() => {});
+    });
   },
 
   saveSermon: async (sermon) => {
@@ -1205,10 +1249,14 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
     const highlightsPayload = Object.values(get().highlights);
     const notesPayload = get().notes;
 
+    const token = localStorage.getItem('dailybible_token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
     try {
       const res = await fetch('/api/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           progress: progressPayload,
           highlights: highlightsPayload,
@@ -1216,6 +1264,58 @@ export const useUserDataStore = create<UserDataState>((set, get) => ({
         }),
       });
       if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        progress?: Array<{ group_id: string; day_index: number; part: 'ps' | 'nt' | 'ot' }>;
+        highlights?: Array<HighlightRecord>;
+        notes?: Array<NoteRecord>;
+      };
+
+      // 1. Merge progress: Union of all parts per group:day
+      if (Array.isArray(data.progress)) {
+        const mergedProgress = { ...get().progressMap };
+        for (const p of data.progress) {
+          const k = `${p.group_id}:${p.day_index}`;
+          const currentParts = mergedProgress[k] || [];
+          if (!currentParts.includes(p.part)) {
+            mergedProgress[k] = [...currentParts, p.part];
+          }
+        }
+        set({ progressMap: mergedProgress });
+        persistState({ progressMap: mergedProgress });
+      }
+
+      // 2. Merge highlights: keep newest updated_at
+      if (Array.isArray(data.highlights)) {
+        const mergedHls = { ...get().highlights };
+        for (const h of data.highlights) {
+          const k = `${h.book}.${h.chapter}.${h.verse}`;
+          if (!mergedHls[k] || h.updated_at >= mergedHls[k].updated_at) {
+            mergedHls[k] = h;
+          }
+        }
+        set({ highlights: mergedHls });
+        persistState({ highlights: mergedHls });
+      }
+
+      // 3. Merge notes: keep newest updated_at per note id
+      if (Array.isArray(data.notes)) {
+        const noteMap = new Map<string, NoteRecord>();
+        for (const n of data.notes) {
+          noteMap.set(n.id, n);
+        }
+        for (const localN of get().notes) {
+          const serverN = noteMap.get(localN.id);
+          if (!serverN || localN.updated_at > serverN.updated_at) {
+            noteMap.set(localN.id, localN);
+          }
+        }
+        const mergedNotes = Array.from(noteMap.values()).sort(
+          (a, b) => b.updated_at - a.updated_at
+        );
+        set({ notes: mergedNotes });
+        persistState({ notes: mergedNotes });
+      }
     } catch {
       // Offline mode keeps local state intact
     }
