@@ -4384,8 +4384,9 @@
           "bookNameTrad": "詩篇",
           "chapterStart": 119,
           "chapterEnd": 119,
-          "labelSimp": "诗篇 119章",
-          "labelTrad": "詩篇 119章"
+          "verseSpec": "1-88",
+          "labelSimp": "诗篇 119:1-88",
+          "labelTrad": "詩篇 119:1-88"
         },
         "nt": {
           "part": "nt",
@@ -4421,8 +4422,9 @@
           "bookNameTrad": "詩篇",
           "chapterStart": 119,
           "chapterEnd": 119,
-          "labelSimp": "诗篇 119章",
-          "labelTrad": "詩篇 119章"
+          "verseSpec": "89-176",
+          "labelSimp": "诗篇 119:89-176",
+          "labelTrad": "詩篇 119:89-176"
         },
         "nt": {
           "part": "nt",
@@ -9954,8 +9956,24 @@
           "bookNameTrad": "耶利米書",
           "chapterStart": 13,
           "chapterEnd": 13,
-          "labelSimp": "耶利米书 13章",
-          "labelTrad": "耶利米書 13章"
+          "subRanges": [
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 13,
+              "chapterEnd": 13
+            },
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 22,
+              "chapterEnd": 22
+            }
+          ],
+          "labelSimp": "耶利米书 13, 22章",
+          "labelTrad": "耶利米書 13, 22章"
         }
       }
     },
@@ -10363,8 +10381,25 @@
           "chapterStart": 36,
           "chapterEnd": 36,
           "verseSpec": "9-10",
-          "labelSimp": "历代志下 36:9-10",
-          "labelTrad": "歷代志下 36:9-10"
+          "subRanges": [
+            {
+              "bookId": "2ch",
+              "bookNameSimp": "历代志下",
+              "bookNameTrad": "歷代志下",
+              "chapterStart": 36,
+              "chapterEnd": 36,
+              "verseSpec": "9-10"
+            },
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 1,
+              "chapterEnd": 1
+            }
+          ],
+          "labelSimp": "历代志下 36:9-10, 以西结书 1章",
+          "labelTrad": "歷代志下 36:9-10, 以西結書 1章"
         }
       }
     },
@@ -10807,8 +10842,25 @@
           "bookNameTrad": "以西結書",
           "chapterStart": 25,
           "chapterEnd": 25,
-          "labelSimp": "以西结书 25章",
-          "labelTrad": "以西結書 25章"
+          "subRanges": [
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 25,
+              "chapterEnd": 25
+            },
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 29,
+              "chapterEnd": 29,
+              "verseSpec": "1-16"
+            }
+          ],
+          "labelSimp": "以西结书 25章, 29:1-16",
+          "labelTrad": "以西結書 25章, 29:1-16"
         }
       }
     },
@@ -10881,8 +10933,25 @@
           "bookNameTrad": "以西結書",
           "chapterStart": 28,
           "chapterEnd": 28,
-          "labelSimp": "以西结书 28章",
-          "labelTrad": "以西結書 28章"
+          "subRanges": [
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 28,
+              "chapterEnd": 28
+            },
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 30,
+              "chapterEnd": 30,
+              "verseSpec": "20-26"
+            }
+          ],
+          "labelSimp": "以西结书 28章, 30:20-26",
+          "labelTrad": "以西結書 28章, 30:20-26"
         }
       }
     },
@@ -11120,8 +11189,9 @@
           "bookNameTrad": "詩篇",
           "chapterStart": 119,
           "chapterEnd": 119,
-          "labelSimp": "诗篇 119章",
-          "labelTrad": "詩篇 119章"
+          "verseSpec": "1-88",
+          "labelSimp": "诗篇 119:1-88",
+          "labelTrad": "詩篇 119:1-88"
         },
         "nt": {
           "part": "nt",
@@ -11157,8 +11227,9 @@
           "bookNameTrad": "詩篇",
           "chapterStart": 119,
           "chapterEnd": 119,
-          "labelSimp": "诗篇 119章",
-          "labelTrad": "詩篇 119章"
+          "verseSpec": "89-176",
+          "labelSimp": "诗篇 119:89-176",
+          "labelTrad": "詩篇 119:89-176"
         },
         "nt": {
           "part": "nt",
@@ -11214,8 +11285,33 @@
           "bookNameTrad": "以西結書",
           "chapterStart": 48,
           "chapterEnd": 48,
-          "labelSimp": "以西结书 48章",
-          "labelTrad": "以西結書 48章"
+          "subRanges": [
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 48,
+              "chapterEnd": 48
+            },
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 29,
+              "chapterEnd": 29,
+              "verseSpec": "17-21"
+            },
+            {
+              "bookId": "ezk",
+              "bookNameSimp": "以西结书",
+              "bookNameTrad": "以西結書",
+              "chapterStart": 30,
+              "chapterEnd": 30,
+              "verseSpec": "1-19"
+            }
+          ],
+          "labelSimp": "以西结书 48章, 29:17-30:19",
+          "labelTrad": "以西結書 48章, 29:17-30:19"
         }
       }
     },
@@ -11251,8 +11347,24 @@
           "bookNameTrad": "耶利米書",
           "chapterStart": 45,
           "chapterEnd": 45,
-          "labelSimp": "耶利米书 45章",
-          "labelTrad": "耶利米書 45章"
+          "subRanges": [
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 45,
+              "chapterEnd": 45
+            },
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 25,
+              "chapterEnd": 25
+            }
+          ],
+          "labelSimp": "耶利米书 45, 25章",
+          "labelTrad": "耶利米書 45, 25章"
         }
       }
     },
@@ -11363,8 +11475,25 @@
           "chapterStart": 36,
           "chapterEnd": 36,
           "verseSpec": "11-21",
-          "labelSimp": "历代志下 36:11-21",
-          "labelTrad": "歷代志下 36:11-21"
+          "subRanges": [
+            {
+              "bookId": "2ch",
+              "bookNameSimp": "历代志下",
+              "bookNameTrad": "歷代志下",
+              "chapterStart": 36,
+              "chapterEnd": 36,
+              "verseSpec": "11-21"
+            },
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 27,
+              "chapterEnd": 27
+            }
+          ],
+          "labelSimp": "历代志下 36:11-21, 耶利米书 27章",
+          "labelTrad": "歷代志下 36:11-21, 耶利米書 27章"
         }
       }
     },
@@ -11548,8 +11677,24 @@
           "bookNameTrad": "耶利米書",
           "chapterStart": 21,
           "chapterEnd": 21,
-          "labelSimp": "耶利米书 21章",
-          "labelTrad": "耶利米書 21章"
+          "subRanges": [
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 21,
+              "chapterEnd": 21
+            },
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 34,
+              "chapterEnd": 34
+            }
+          ],
+          "labelSimp": "耶利米书 21, 34章",
+          "labelTrad": "耶利米書 21, 34章"
         }
       }
     },
@@ -11622,8 +11767,24 @@
           "bookNameTrad": "耶利米書",
           "chapterStart": 39,
           "chapterEnd": 39,
-          "labelSimp": "耶利米书 39章",
-          "labelTrad": "耶利米書 39章"
+          "subRanges": [
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 39,
+              "chapterEnd": 39
+            },
+            {
+              "bookId": "jer",
+              "bookNameSimp": "耶利米书",
+              "bookNameTrad": "耶利米書",
+              "chapterStart": 52,
+              "chapterEnd": 52
+            }
+          ],
+          "labelSimp": "耶利米书 39, 52章",
+          "labelTrad": "耶利米書 39, 52章"
         }
       }
     },
@@ -13510,8 +13671,24 @@
           "bookNameTrad": "詩篇",
           "chapterStart": 111,
           "chapterEnd": 111,
-          "labelSimp": "诗篇 111章",
-          "labelTrad": "詩篇 111章"
+          "subRanges": [
+            {
+              "bookId": "psa",
+              "bookNameSimp": "诗篇",
+              "bookNameTrad": "詩篇",
+              "chapterStart": 111,
+              "chapterEnd": 111
+            },
+            {
+              "bookId": "psa",
+              "bookNameSimp": "诗篇",
+              "bookNameTrad": "詩篇",
+              "chapterStart": 1,
+              "chapterEnd": 1
+            }
+          ],
+          "labelSimp": "诗篇 111, 1章",
+          "labelTrad": "詩篇 111, 1章"
         }
       }
     }

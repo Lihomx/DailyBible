@@ -1,3 +1,12 @@
+export interface PlanSubRange {
+  bookId: string;
+  bookNameSimp: string;
+  bookNameTrad: string;
+  chapterStart: number;
+  chapterEnd: number;
+  verseSpec?: string;
+}
+
 export interface PlanReadingSegment {
   part: 'ps' | 'nt' | 'ot';
   bookId: string;
@@ -6,6 +15,7 @@ export interface PlanReadingSegment {
   chapterStart: number;
   chapterEnd: number;
   verseSpec?: string;
+  subRanges?: PlanSubRange[];
   labelSimp: string;
   labelTrad: string;
 }

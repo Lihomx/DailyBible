@@ -43,28 +43,44 @@ export function buildPlanDayAudioQueue(dayEntry: PlanDayEntry): PlanQueueChapter
   ];
 
   for (const { part, tag, seg } of segList) {
-    let vStart: number | undefined;
-    let vEnd: number | undefined;
-    if (seg.verseSpec) {
-      const nums = seg.verseSpec.split('-').map((n) => parseInt(n, 10));
-      if (!isNaN(nums[0])) vStart = nums[0];
-      if (!isNaN(nums[1])) vEnd = nums[1];
-    }
+    const ranges =
+      seg.subRanges && seg.subRanges.length > 0
+        ? seg.subRanges
+        : [
+            {
+              bookId: seg.bookId,
+              bookNameSimp: seg.bookNameSimp,
+              bookNameTrad: seg.bookNameTrad,
+              chapterStart: seg.chapterStart,
+              chapterEnd: seg.chapterEnd,
+              verseSpec: seg.verseSpec,
+            },
+          ];
 
-    for (let ch = seg.chapterStart; ch <= seg.chapterEnd; ch++) {
-      const abbrS = getBookAbbr(seg.bookId, 'simp');
-      const abbrT = getBookAbbr(seg.bookId, 'trad');
-      const suffix = seg.verseSpec ? `:${seg.verseSpec}` : '章';
-      queue.push({
-        part,
-        partTag: tag,
-        bookId: seg.bookId,
-        chapter: ch,
-        verseStart: vStart,
-        verseEnd: vEnd,
-        labelSimp: `${abbrS}${ch}${suffix}`,
-        labelTrad: `${abbrT}${ch}${suffix}`,
-      });
+    for (const r of ranges) {
+      let vStart: number | undefined;
+      let vEnd: number | undefined;
+      if (r.verseSpec) {
+        const nums = r.verseSpec.split('-').map((n) => parseInt(n, 10));
+        if (!isNaN(nums[0])) vStart = nums[0];
+        if (!isNaN(nums[1])) vEnd = nums[1];
+      }
+
+      for (let ch = r.chapterStart; ch <= r.chapterEnd; ch++) {
+        const abbrS = getBookAbbr(r.bookId, 'simp');
+        const abbrT = getBookAbbr(r.bookId, 'trad');
+        const suffix = r.verseSpec ? `:${r.verseSpec}` : '章';
+        queue.push({
+          part,
+          partTag: tag,
+          bookId: r.bookId,
+          chapter: ch,
+          verseStart: vStart,
+          verseEnd: vEnd,
+          labelSimp: `${abbrS}${ch}${suffix}`,
+          labelTrad: `${abbrT}${ch}${suffix}`,
+        });
+      }
     }
   }
 

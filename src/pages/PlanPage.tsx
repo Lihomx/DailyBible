@@ -20,6 +20,7 @@ import {
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
 import { useTtsStore } from '../stores/ttsStore';
+import { PlanPrefaceGuide } from '../components/PlanPrefaceGuide';
 
 export const PlanPage: React.FC = () => {
   const navigate = useNavigate();
@@ -296,6 +297,9 @@ export const PlanPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Collapsible Reading Plan Preface & 2 Tim 3:16 Guide */}
+          <PlanPrefaceGuide />
+
           {/* 12 Months Selector Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
@@ -415,6 +419,7 @@ export const PlanPage: React.FC = () => {
                             <button
                               onClick={() => handleToggleDayPart(d.dayIndex, partKey)}
                               className="flex items-center gap-2 text-left flex-1 truncate"
+                              title={label}
                             >
                               {checked ? (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />

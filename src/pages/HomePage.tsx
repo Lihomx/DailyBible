@@ -29,6 +29,7 @@ import { loadChapterVerses, VerseItem } from '../lib/bible';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useUserDataStore } from '../stores/userDataStore';
 import { useTtsStore } from '../stores/ttsStore';
+import { PlanPrefaceGuide } from '../components/PlanPrefaceGuide';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,7 +56,13 @@ export const HomePage: React.FC = () => {
   // Inline expanded segment reader
   const [expandedPart, setExpandedPart] = useState<'ps' | 'nt' | 'ot' | null>(null);
   const [inlineVerses, setInlineVerses] = useState<
-    Array<{ chapter: number; verses: VerseItem[] }>
+    Array<{
+      bookNameSimp: string;
+      bookNameTrad: string;
+      chapter: number;
+      verseSpec?: string;
+      verses: VerseItem[];
+    }>
   >([]);
   const [loadingInline, setLoadingInline] = useState(false);
 
@@ -168,18 +175,49 @@ export const HomePage: React.FC = () => {
     }
     setExpandedPart(seg.part);
     setLoadingInline(true);
-    const loaded: Array<{ chapter: number; verses: VerseItem[] }> = [];
-    for (let ch = seg.chapterStart; ch <= seg.chapterEnd; ch++) {
-      let chVerses = await loadChapterVerses(seg.bookId, ch, script);
-      if (seg.verseSpec) {
-        const [vStart, vEnd] = seg.verseSpec.split('-').map((n) => parseInt(n, 10));
-        if (!isNaN(vStart)) {
-          chVerses = chVerses.filter(
-            (v) => v.v >= vStart && (isNaN(vEnd) || v.v <= vEnd)
-          );
+    const loaded: Array<{
+      bookNameSimp: string;
+      bookNameTrad: string;
+      chapter: number;
+      verseSpec?: string;
+      verses: VerseItem[];
+    }> = [];
+
+    const ranges =
+      seg.subRanges && seg.subRanges.length > 0
+        ? seg.subRanges
+        : [
+            {
+              bookId: seg.bookId,
+              bookNameSimp: seg.bookNameSimp,
+              bookNameTrad: seg.bookNameTrad,
+              chapterStart: seg.chapterStart,
+              chapterEnd: seg.chapterEnd,
+              verseSpec: seg.verseSpec,
+            },
+          ];
+
+    for (const r of ranges) {
+      for (let ch = r.chapterStart; ch <= r.chapterEnd; ch++) {
+        let chVerses = await loadChapterVerses(r.bookId, ch, script);
+        if (r.verseSpec) {
+          const [vStart, vEnd] = r.verseSpec
+            .split('-')
+            .map((n) => parseInt(n, 10));
+          if (!isNaN(vStart)) {
+            chVerses = chVerses.filter(
+              (v) => v.v >= vStart && (isNaN(vEnd) || v.v <= vEnd)
+            );
+          }
         }
+        loaded.push({
+          bookNameSimp: r.bookNameSimp,
+          bookNameTrad: r.bookNameTrad,
+          chapter: ch,
+          verseSpec: r.verseSpec,
+          verses: chVerses,
+        });
       }
-      loaded.push({ chapter: ch, verses: chVerses });
     }
     setInlineVerses(loaded);
     setLoadingInline(false);
@@ -415,12 +453,25 @@ export const HomePage: React.FC = () => {
                       <span>{t('朗读')}</span>
                     </button>
 
-                    <Link
-                      to={`/bible/${seg.bookId}.${seg.chapterStart}`}
-                      className="px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand-hover transition"
-                    >
-                      {t('进入章节')}
-                    </Link>
+                    {seg.subRanges && seg.subRanges.length > 1 ? (
+                      seg.subRanges.map((r, rIdx) => (
+                        <Link
+                          key={`${r.bookId}-${r.chapterStart}-${rIdx}`}
+                          to={`/bible/${r.bookId}.${r.chapterStart}`}
+                          className="px-2.5 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand-hover transition"
+                        >
+                          {script === 'trad' ? r.bookNameTrad : r.bookNameSimp} {r.chapterStart}
+                          {r.chapterEnd > r.chapterStart ? `-${r.chapterEnd}` : ''}
+                        </Link>
+                      ))
+                    ) : (
+                      <Link
+                        to={`/bible/${seg.bookId}.${seg.chapterStart}`}
+                        className="px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand-hover transition"
+                      >
+                        {t('进入章节')}
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -432,13 +483,14 @@ export const HomePage: React.FC = () => {
                         {t('正在加载经文...')}
                       </div>
                     ) : (
-                      inlineVerses.map((chBlock) => (
-                        <div key={chBlock.chapter} className="space-y-2">
+                      inlineVerses.map((chBlock, bIdx) => (
+                        <div key={`${chBlock.bookNameSimp}-${chBlock.chapter}-${bIdx}`} className="space-y-2">
                           <div className="text-xs font-bold text-brand">
                             {script === 'trad'
-                              ? seg.bookNameTrad
-                              : seg.bookNameSimp}{' '}
+                              ? chBlock.bookNameTrad
+                              : chBlock.bookNameSimp}{' '}
                             {t('第')} {chBlock.chapter} {t('章')}
+                            {chBlock.verseSpec ? ` (${chBlock.verseSpec}${t('节')})` : ''}
                           </div>
                           <div className="text-base leading-relaxed space-y-1">
                             {chBlock.verses.map((v) => (
@@ -518,6 +570,9 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Collapsible Reading Plan Preface & 2 Tim 3:16 Guide */}
+      <PlanPrefaceGuide />
 
       {/* Quick Feature Cards: Search & Latest Sunday Sermon */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
