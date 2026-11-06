@@ -129,6 +129,8 @@ export interface TtsState {
   togglePlayPause: () => void;
   prevVerse: () => void;
   nextVerse: () => void;
+  prevChapter: () => void;
+  nextChapter: () => void;
   jumpToVerseIndex: (idx: number) => void;
   seekToTime: (seconds: number) => void;
   setRate: (rate: number) => void;
@@ -206,6 +208,16 @@ export function parseLyricTimestamps(lyric: string): LyricCue[] {
 let activeAudio: HTMLAudioElement | null = null;
 let loadSessionId = 0;
 
+function getOrCreateAudioElement(): HTMLAudioElement {
+  if (!activeAudio && typeof window !== 'undefined') {
+    activeAudio = new Audio();
+    activeAudio.preload = 'auto';
+    // Enable background audio playback capabilities on mobile Safari/Chrome
+    (activeAudio as any).playsInline = true;
+  }
+  return activeAudio!;
+}
+
 function cleanupAudioElement() {
   if (activeAudio) {
     try {
@@ -216,11 +228,11 @@ function cleanupAudioElement() {
       activeAudio.onplay = null;
       activeAudio.onpause = null;
       activeAudio.pause();
-      activeAudio.src = '';
+      activeAudio.removeAttribute('src');
+      activeAudio.load();
     } catch {
       // ignore
     }
-    activeAudio = null;
   }
 }
 
@@ -327,7 +339,7 @@ async function loadAndPlayChapterAudio(
   if (typeof window === 'undefined') return;
 
   const session = ++loadSessionId;
-  cleanupAudioElement();
+  const audio = getOrCreateAudioElement();
 
   const state = get();
   const bookMeta = BOOK_BY_ID[state.bookId] || BOOK_BY_ID['gen'];
@@ -360,11 +372,9 @@ async function loadAndPlayChapterAudio(
     const downloadUrl: string = data.downloadUrl;
     const cues = parseLyricTimestamps(data.lyric || '');
 
-    const audio = new Audio();
-    audio.preload = 'auto';
+    // Configure audio on single reused element (ensures iOS Safari doesn't block auto-advance)
     audio.src = downloadUrl;
     audio.playbackRate = get().rate;
-    activeAudio = audio;
 
     // Calculate starting time if startVerseNumber > 1
     let initialSeekTime = 0;
@@ -462,18 +472,29 @@ async function loadAndPlayChapterAudio(
       set({
         isLoadingAudio: false,
         isPlaying: false,
-        audioError: '音频流加载失败，请重试',
+        audioError: '音频流加载失败，请点击播放重试',
       });
     };
 
     set({ cues });
-    await audio.play();
+
+    // Try playing. In case iOS Safari temporarily blocks autonomous playback, catch it gracefully
+    try {
+      await audio.play();
+    } catch (playErr) {
+      if (session !== loadSessionId) return;
+      set({
+        isLoadingAudio: false,
+        isPlaying: false,
+        isPaused: true,
+      });
+    }
   } catch (err: any) {
     if (session !== loadSessionId) return;
     set({
       isLoadingAudio: false,
       isPlaying: false,
-      audioError: String(err?.message || '无法播放该章音频'),
+      audioError: String(err?.message || '无法播放该章音频，请点击重试'),
     });
   }
 }
@@ -676,7 +697,79 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       } else {
         loadAndPlayChapterAudio(get, set, targetVerseNum);
       }
+    } else {
+      // Reached the end of current chapter verses -> advance to next chapter
+      get().nextChapter();
     }
+  },
+
+  prevChapter: () => {
+    const s = get();
+    if (s.playbackMode === 'plan_loop' && s.planQueue.length > 0) {
+      const prevIdx =
+        (s.planQueueIndex - 1 + s.planQueue.length) % s.planQueue.length;
+      get().jumpToPlanQueueItem(prevIdx);
+      return;
+    }
+    const currBookMeta = BOOK_BY_ID[s.bookId] || BOOK_BY_ID['gen'];
+    let prevBookId = s.bookId;
+    let prevCh = s.chapter - 1;
+    if (prevCh < 1) {
+      if (currBookMeta.index > 1) {
+        const prevBook = BIBLE_BOOKS[currBookMeta.index - 2];
+        prevBookId = prevBook.id;
+        prevCh = prevBook.chapters;
+      } else {
+        return;
+      }
+    }
+    const script = useSettingsStore.getState().script;
+    const name = getBookName(prevBookId, script);
+    loadChapterVerses(prevBookId, prevCh, script).then((verses) => {
+      syncBrowserUrlToChapter(prevBookId, prevCh);
+      set({
+        bookId: prevBookId,
+        bookName: name,
+        chapter: prevCh,
+        verses,
+        currentIndex: 0,
+      });
+      loadAndPlayChapterAudio(get, set, 1);
+    });
+  },
+
+  nextChapter: () => {
+    const s = get();
+    if (s.playbackMode === 'plan_loop' && s.planQueue.length > 0) {
+      const nextIdx = (s.planQueueIndex + 1) % s.planQueue.length;
+      get().jumpToPlanQueueItem(nextIdx);
+      return;
+    }
+    const currBookMeta = BOOK_BY_ID[s.bookId] || BOOK_BY_ID['gen'];
+    let nextBookId = s.bookId;
+    let nextCh = s.chapter + 1;
+    if (nextCh > currBookMeta.chapters) {
+      if (currBookMeta.index < 66) {
+        const nextBook = BIBLE_BOOKS[currBookMeta.index];
+        nextBookId = nextBook.id;
+        nextCh = 1;
+      } else {
+        return;
+      }
+    }
+    const script = useSettingsStore.getState().script;
+    const name = getBookName(nextBookId, script);
+    loadChapterVerses(nextBookId, nextCh, script).then((verses) => {
+      syncBrowserUrlToChapter(nextBookId, nextCh);
+      set({
+        bookId: nextBookId,
+        bookName: name,
+        chapter: nextCh,
+        verses,
+        currentIndex: 0,
+      });
+      loadAndPlayChapterAudio(get, set, 1);
+    });
   },
 
   jumpToVerseIndex: (idx) => {

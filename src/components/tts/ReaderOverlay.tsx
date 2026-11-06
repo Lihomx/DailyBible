@@ -54,6 +54,8 @@ export const ReaderOverlay: React.FC = () => {
     togglePlayPause,
     prevVerse,
     nextVerse,
+    prevChapter,
+    nextChapter,
     jumpToPlanQueueItem,
     seekToTime,
     setRate,
@@ -417,6 +419,14 @@ export const ReaderOverlay: React.FC = () => {
           {/* Playback Controls */}
           <div className="flex items-center gap-1 shrink-0">
             <button
+              onClick={prevChapter}
+              title={playbackMode === 'plan_loop' ? t('上一个待读经文段落') : t('上一章')}
+              className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100 transition hidden sm:inline-flex"
+            >
+              <SkipBack className="w-3.5 h-3.5 fill-current" />
+            </button>
+
+            <button
               onClick={prevVerse}
               disabled={currentIndex <= 0}
               title={t('上一节')}
@@ -441,11 +451,18 @@ export const ReaderOverlay: React.FC = () => {
 
             <button
               onClick={nextVerse}
-              disabled={currentIndex >= verses.length - 1}
-              title={t('下一节')}
-              className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-30 transition"
+              title={currentIndex >= verses.length - 1 ? (playbackMode === 'plan_loop' ? t('下一段待读经文') : t('下一章')) : t('下一节')}
+              className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition"
             >
               <SkipForward className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={nextChapter}
+              title={playbackMode === 'plan_loop' ? t('下一个待读经文段落') : t('下一章')}
+              className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100 transition"
+            >
+              <SkipForward className="w-3.5 h-3.5 fill-current" />
             </button>
 
             <button
