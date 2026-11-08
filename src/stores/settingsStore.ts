@@ -34,7 +34,7 @@ function loadInitialSettings() {
     return {
       theme: 'light' as ThemeMode,
       script: 'simp' as ScriptMode,
-      fontSize: 'lg' as FontSizeScale,
+      fontSize: 'md' as FontSizeScale,
       lineHeight: 'relaxed' as const,
       showVerseNumbers: true,
       readingLayout: 'paragraph' as ReadingLayoutMode,
@@ -48,7 +48,7 @@ function loadInitialSettings() {
       return {
         theme: (parsed.theme as ThemeMode) || 'light',
         script: (parsed.script as ScriptMode) || 'simp',
-        fontSize: (parsed.fontSize as FontSizeScale) || 'lg',
+        fontSize: (parsed.fontSize as FontSizeScale) || 'md',
         lineHeight: parsed.lineHeight || 'relaxed',
         showVerseNumbers: parsed.showVerseNumbers ?? true,
         readingLayout: (parsed.readingLayout as ReadingLayoutMode) || 'paragraph',
@@ -61,7 +61,7 @@ function loadInitialSettings() {
   return {
     theme: 'light' as ThemeMode,
     script: 'simp' as ScriptMode,
-    fontSize: 'lg' as FontSizeScale,
+    fontSize: 'md' as FontSizeScale,
     lineHeight: 'relaxed' as const,
     showVerseNumbers: true,
     readingLayout: 'paragraph' as ReadingLayoutMode,

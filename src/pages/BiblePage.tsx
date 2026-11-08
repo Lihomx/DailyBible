@@ -47,6 +47,39 @@ const HIGHLIGHT_COLORS: Array<{ color: HighlightColor; label: string; bg: string
   { color: 'purple', label: '紫', bg: 'bg-purple-300' },
 ];
 
+function renderVerseWithFootnotes(text: string) {
+  const clean = text.replace(/\u3000/g, '');
+  const fnRegex = /([（〔]有古卷[\s\S]*?[）〕])/g;
+  const parts = clean.split(fnRegex);
+  if (parts.length <= 1) {
+    return <span>{clean}</span>;
+  }
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (/^[（〔]有古卷/.test(part)) {
+          const vNumMatch = part.match(/^([（〔]有古卷[\s\S]*?)([\d]+)([\s\S]*?[）〕])$/);
+          if (vNumMatch) {
+            return (
+              <span key={i} className="verse-footnote">
+                {vNumMatch[1]}
+                <span className="verse-footnote-num">{vNumMatch[2]}</span>
+                {vNumMatch[3]}
+              </span>
+            );
+          }
+          return (
+            <span key={i} className="verse-footnote">
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 export const BiblePage: React.FC = () => {
   const { bookChapter = 'gen.1' } = useParams<{ bookChapter: string }>();
   const [searchParams] = useSearchParams();
@@ -675,7 +708,7 @@ export const BiblePage: React.FC = () => {
 
       {/* Main Scripture Reading Container */}
       <div
-        className={`w-full max-w-3xl px-4 sm:px-10 pb-36 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
+        className={`w-full max-w-3xl px-4 sm:px-8 pb-36 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
       >
         {loading ? (
           <div className="py-20 text-center theme-text-muted text-sm">
@@ -730,23 +763,7 @@ export const BiblePage: React.FC = () => {
                         </span>
                       )}
                       <span className={isSpeaking ? 'text-[1.08em]' : ''}>
-                        {v.t.includes('（有古卷在此有') ? (
-                          (() => {
-                            const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
-                            if (match) {
-                              return (
-                                <>
-                                  <span>{match[1].replace(/\u3000/g, ' ')}</span>
-                                  <span className="verse-footnote">{match[2]}</span>
-                                  <span>{match[3].replace(/\u3000/g, ' ')}</span>
-                                </>
-                              );
-                            }
-                            return <span>{v.t.replace(/\u3000/g, ' ')}</span>;
-                          })()
-                        ) : (
-                          <span>{v.t.replace(/\u3000/g, ' ')}</span>
-                        )}
+                        {renderVerseWithFootnotes(v.t)}
                       </span>
                       {hasNote && (
                         <StickyNote className="w-3.5 h-3.5 text-brand shrink-0 mt-1" />
@@ -763,11 +780,11 @@ export const BiblePage: React.FC = () => {
             {paragraphs.map((para, pIdx) => (
               <div key={pIdx} className="space-y-2.5">
                 {para.heading && (
-                  <h2 className="text-lg sm:text-xl font-bold pt-3 pb-1 tracking-normal font-sans">
+                  <h2 className={`text-lg sm:text-xl font-bold ${pIdx === 0 ? 'pt-1' : 'pt-6 sm:pt-7'} pb-2.5 tracking-normal font-sans`}>
                     {para.heading}
                   </h2>
                 )}
-                <p className="text-justify leading-[2.1] tracking-wide break-words selection:bg-brand/20">
+                <p className="text-justify break-words selection:bg-brand/20">
                   {para.items.map((v, vIdx) => {
                     const hlKey = `${bookId}.${chapter}.${v.v}`;
                     const hl = highlights[hlKey];
@@ -798,23 +815,7 @@ export const BiblePage: React.FC = () => {
                         {showVerseNumbers && (
                           <sup className="verse-number">{v.v}</sup>
                         )}
-                        {v.t.includes('（有古卷在此有') ? (
-                          (() => {
-                            const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
-                            if (match) {
-                              return (
-                                <>
-                                  <span>{match[1]}</span>
-                                  <span className="verse-footnote">{match[2]}</span>
-                                  <span>{match[3]}</span>
-                                </>
-                              );
-                            }
-                            return <span>{v.t}</span>;
-                          })()
-                        ) : (
-                          <span>{v.t}</span>
-                        )}
+                        {renderVerseWithFootnotes(v.t)}
                         {hasNote && (
                           <span
                             title={t('该节包含灵修笔记')}
@@ -826,7 +827,6 @@ export const BiblePage: React.FC = () => {
                         {inBatch && (
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand ml-1 align-middle" />
                         )}
-                        {' '}
                       </span>
                     );
                   })}
@@ -863,23 +863,7 @@ export const BiblePage: React.FC = () => {
                           {v.v}
                         </span>
                       )}
-                      {v.t.includes('（有古卷在此有') ? (
-                        (() => {
-                          const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
-                          if (match) {
-                            return (
-                              <>
-                                <span>{match[1]}</span>
-                                <span className="verse-footnote">{match[2]}</span>
-                                <span>{match[3]}</span>
-                              </>
-                            );
-                          }
-                          return <span>{v.t}</span>;
-                        })()
-                      ) : (
-                        <span>{v.t}</span>
-                      )}
+                      {renderVerseWithFootnotes(v.t)}
                     </div>
                     {parallelMode && parallelV && (
                       <div className="text-sm theme-text-muted pt-1 border-t theme-border mt-1">
