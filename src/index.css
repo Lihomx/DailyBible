@@ -178,3 +178,42 @@ html[data-theme='dark'] .hl-purple {
     padding: 0 20px;
   }
 }
+
+/* wd.bible exact typography slider */
+.wdbible-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.dark .wdbible-slider {
+  background: #374151;
+}
+.wdbible-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #e0564c;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.wdbible-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.wdbible-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #e0564c;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}

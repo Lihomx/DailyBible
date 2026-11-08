@@ -12,6 +12,8 @@ interface SettingsState {
   fontSize: FontSizeScale;
   lineHeight: 'normal' | 'relaxed' | 'loose';
   showVerseNumbers: boolean;
+  showHeadings: boolean;
+  showFootnotes: boolean;
   readingLayout: ReadingLayoutMode;
   sidebarCollapsed: boolean;
 
@@ -22,6 +24,8 @@ interface SettingsState {
   setFontSize: (fontSize: FontSizeScale) => void;
   setLineHeight: (lh: 'normal' | 'relaxed' | 'loose') => void;
   setShowVerseNumbers: (show: boolean) => void;
+  setShowHeadings: (show: boolean) => void;
+  setShowFootnotes: (show: boolean) => void;
   setReadingLayout: (layout: ReadingLayoutMode) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   t: (simpText: string) => string;
@@ -37,6 +41,8 @@ function loadInitialSettings() {
       fontSize: 'md' as FontSizeScale,
       lineHeight: 'relaxed' as const,
       showVerseNumbers: true,
+      showHeadings: true,
+      showFootnotes: true,
       readingLayout: 'paragraph' as ReadingLayoutMode,
       sidebarCollapsed: false,
     };
@@ -51,6 +57,8 @@ function loadInitialSettings() {
         fontSize: (parsed.fontSize as FontSizeScale) || 'md',
         lineHeight: parsed.lineHeight || 'relaxed',
         showVerseNumbers: parsed.showVerseNumbers ?? true,
+        showHeadings: parsed.showHeadings ?? true,
+        showFootnotes: parsed.showFootnotes ?? true,
         readingLayout: (parsed.readingLayout as ReadingLayoutMode) || 'paragraph',
         sidebarCollapsed: Boolean(parsed.sidebarCollapsed),
       };
@@ -64,6 +72,8 @@ function loadInitialSettings() {
     fontSize: 'md' as FontSizeScale,
     lineHeight: 'relaxed' as const,
     showVerseNumbers: true,
+    showHeadings: true,
+    showFootnotes: true,
     readingLayout: 'paragraph' as ReadingLayoutMode,
     sidebarCollapsed: false,
   };
@@ -125,6 +135,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setShowVerseNumbers: (showVerseNumbers) => {
     saveToStorage({ showVerseNumbers });
     set({ showVerseNumbers });
+  },
+
+  setShowHeadings: (showHeadings) => {
+    saveToStorage({ showHeadings });
+    set({ showHeadings });
+  },
+
+  setShowFootnotes: (showFootnotes) => {
+    saveToStorage({ showFootnotes });
+    set({ showFootnotes });
   },
 
   setReadingLayout: (readingLayout) => {

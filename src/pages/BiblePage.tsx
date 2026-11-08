@@ -47,7 +47,30 @@ const HIGHLIGHT_COLORS: Array<{ color: HighlightColor; label: string; bg: string
   { color: 'purple', label: '紫', bg: 'bg-purple-300' },
 ];
 
-function renderVerseWithFootnotes(text: string) {
+const FONT_SCALES: FontSizeScale[] = ['sm', 'md', 'lg', 'xl', '2xl'];
+
+const ToggleSwitch: React.FC<{
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}> = ({ checked, onChange }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={() => onChange(!checked)}
+    className={`w-11 h-6 rounded-full transition-colors duration-200 relative flex items-center px-0.5 cursor-pointer focus:outline-none shrink-0 ${
+      checked ? 'bg-[#e0564c]' : 'bg-[#d1d5db] dark:bg-[#4b5563]'
+    }`}
+  >
+    <span
+      className={`w-5 h-5 bg-white rounded-full transition-transform duration-200 transform shadow-sm ${
+        checked ? 'translate-x-5' : 'translate-x-0'
+      }`}
+    />
+  </button>
+);
+
+function renderVerseWithFootnotes(text: string, showFootnotes = true) {
   const clean = text.replace(/\u3000/g, '');
   const fnRegex = /([（〔]有古卷[\s\S]*?[）〕])/g;
   const parts = clean.split(fnRegex);
@@ -58,6 +81,7 @@ function renderVerseWithFootnotes(text: string) {
     <>
       {parts.map((part, i) => {
         if (/^[（〔]有古卷/.test(part)) {
+          if (!showFootnotes) return null;
           const vNumMatch = part.match(/^([（〔]有古卷[\s\S]*?)([\d]+)([\s\S]*?[）〕])$/);
           if (vNumMatch) {
             return (
@@ -97,6 +121,7 @@ export const BiblePage: React.FC = () => {
   const focusVerse = parseInt(searchParams.get('v') || '0', 10) || 0;
 
   const {
+    theme,
     script,
     setScript,
     fontSize,
@@ -105,6 +130,10 @@ export const BiblePage: React.FC = () => {
     setLineHeight,
     showVerseNumbers,
     setShowVerseNumbers,
+    showHeadings,
+    setShowHeadings,
+    showFootnotes,
+    setShowFootnotes,
     readingLayout,
     setReadingLayout,
     t,
@@ -206,6 +235,19 @@ export const BiblePage: React.FC = () => {
       }
     }
   }, [activeTtsVerseNum]);
+
+  // Close typography popover when clicking outside
+  useEffect(() => {
+    if (!typoOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#typo-popover') && !target.closest('#typo-trigger')) {
+        setTypoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [typoOpen]);
 
   const navigateChapter = (targetBookId: string, targetCh: number) => {
     setPickerOpen(false);
@@ -330,6 +372,18 @@ export const BiblePage: React.FC = () => {
     setCopiedNotice(true);
     setTimeout(() => setCopiedNotice(false), 1800);
   };
+
+  useEffect(() => {
+    if (!typoOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('#typo-popover') && !target.closest('#typo-trigger')) {
+        setTypoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [typoOpen]);
 
   // Group verses into natural paragraphs when in 'paragraph' layout mode (wd.bible default)
   const paragraphs: Array<{ heading?: string; items: VerseItem[] }> = [];
@@ -511,109 +565,91 @@ export const BiblePage: React.FC = () => {
 
           <div className="relative">
             <button
+              id="typo-trigger"
               onClick={() => setTypoOpen(!typoOpen)}
               title={t('阅读排版与字号设置')}
-              className="px-2.5 py-1.5 rounded-md border theme-border theme-card text-sm font-semibold hover:border-brand hover:text-brand transition shadow-sm flex items-center gap-1"
+              className={`px-3 py-1.5 rounded-md border text-sm font-semibold transition shadow-sm flex items-center justify-center ${
+                typoOpen
+                  ? 'border-[#e0564c] text-[#e0564c] bg-transparent'
+                  : 'theme-border theme-card hover:border-[#e0564c] hover:text-[#e0564c]'
+              }`}
             >
-              <Type className="w-4 h-4" />
               <span>Aa</span>
             </button>
 
-            {/* Typography Popover */}
+            {/* Typography Popover (1:1 微读圣经风格) */}
             {typoOpen && (
-              <div className="absolute right-0 mt-2 w-72 theme-card border rounded-2xl shadow-2xl p-4 z-40 space-y-4 text-xs">
-                <div className="flex items-center justify-between font-semibold text-sm border-b theme-border pb-2">
-                  <span>{t('阅读显示设置')}</span>
-                  <button onClick={() => setTypoOpen(false)}>
-                    <X className="w-4 h-4" />
+              <div
+                id="typo-popover"
+                className="absolute right-0 mt-2 w-64 theme-card border rounded-xl shadow-2xl p-4 z-40 space-y-4 text-xs font-sans"
+              >
+                {/* Header: 设置 + 设置 pill */}
+                <div className="flex items-center justify-between pb-1">
+                  <span className="font-bold text-sm">{t('设置')}</span>
+                  <button
+                    onClick={() => {
+                      setTypoOpen(false);
+                      navigate('/me');
+                    }}
+                    className="px-2.5 py-0.5 rounded-full bg-[#374151] hover:bg-[#1f2937] text-white text-[11px] font-medium transition cursor-pointer"
+                  >
+                    {t('设置')}
                   </button>
                 </div>
 
-                {/* Font Size 5 levels */}
-                <div className="space-y-1.5">
-                  <div className="theme-text-muted">{t('字号大小 (5档)')}</div>
-                  <div className="grid grid-cols-5 gap-1">
-                    {(['sm', 'md', 'lg', 'xl', '2xl'] as FontSizeScale[]).map(
-                      (sz, idx) => (
-                        <button
-                          key={sz}
-                          onClick={() => setFontSize(sz)}
-                          className={`py-1.5 rounded-lg border font-medium ${
-                            fontSize === sz
-                              ? 'border-brand bg-brand text-white'
-                              : 'theme-border hover:border-brand'
-                          }`}
-                        >
-                          {idx + 1}
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Line Height */}
-                <div className="space-y-1.5">
-                  <div className="theme-text-muted">{t('行距')}</div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(
-                      [
-                        ['normal', '紧凑'],
-                        ['relaxed', '标准'],
-                        ['loose', '宽松'],
-                      ] as const
-                    ).map(([lh, label]) => (
-                      <button
-                        key={lh}
-                        onClick={() => setLineHeight(lh)}
-                        className={`py-1.5 rounded-lg border font-medium ${
-                          lineHeight === lh
-                            ? 'border-brand bg-brand text-white'
-                            : 'theme-border hover:border-brand'
-                        }`}
-                      >
-                        {t(label)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Layout mode: Paragraph vs Verse-by-verse */}
-                <div className="space-y-1.5">
-                  <div className="theme-text-muted">{t('排版方式')}</div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      onClick={() => setReadingLayout('paragraph')}
-                      className={`py-1.5 rounded-lg border font-medium ${
-                        readingLayout === 'paragraph'
-                          ? 'border-brand bg-brand text-white'
-                          : 'theme-border hover:border-brand'
-                      }`}
-                    >
-                      {t('段落连排 (微读风格)')}
-                    </button>
-                    <button
-                      onClick={() => setReadingLayout('verse')}
-                      className={`py-1.5 rounded-lg border font-medium ${
-                        readingLayout === 'verse'
-                          ? 'border-brand bg-brand text-white'
-                          : 'theme-border hover:border-brand'
-                      }`}
-                    >
-                      {t('逐节分行')}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Show/Hide Verse Numbers */}
-                <label className="flex items-center justify-between pt-1 cursor-pointer">
-                  <span>{t('显示经文节号')}</span>
+                {/* Font Size Slider: A- [====●====] A+ */}
+                <div className="flex items-center gap-3 pt-1">
+                  <span className="text-xs font-semibold theme-text-muted select-none">A-</span>
                   <input
-                    type="checkbox"
-                    checked={showVerseNumbers}
-                    onChange={(e) => setShowVerseNumbers(e.target.checked)}
-                    className="accent-brand w-4 h-4"
+                    type="range"
+                    min="0"
+                    max="4"
+                    step="1"
+                    value={FONT_SCALES.indexOf(fontSize)}
+                    onChange={(e) => {
+                      const idx = parseInt(e.target.value, 10);
+                      setFontSize(FONT_SCALES[idx] || 'md');
+                    }}
+                    className="wdbible-slider flex-1 cursor-pointer"
+                    aria-label={t('字号大小')}
                   />
-                </label>
+                  <span className="text-sm font-bold theme-text-muted select-none">A+</span>
+                </div>
+
+                {/* 4 Toggle Rows */}
+                <div className="space-y-3.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{t('显示节号')}</span>
+                    <ToggleSwitch
+                      checked={showVerseNumbers}
+                      onChange={setShowVerseNumbers}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{t('显示标题')}</span>
+                    <ToggleSwitch
+                      checked={showHeadings}
+                      onChange={setShowHeadings}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{t('显示脚注')}</span>
+                    <ToggleSwitch
+                      checked={showFootnotes}
+                      onChange={setShowFootnotes}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">{t('逐节分段')}</span>
+                    <ToggleSwitch
+                      checked={readingLayout === 'verse'}
+                      onChange={(checked) => setReadingLayout(checked ? 'verse' : 'paragraph')}
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -730,7 +766,7 @@ export const BiblePage: React.FC = () => {
 
               return (
                 <div key={`${v.v}-${idx}`} id={`verse-${v.v}`} className="space-y-1.5">
-                  {v.h && (
+                  {showHeadings && v.h && (
                     <h2 className="text-xl sm:text-2xl font-bold pt-4 pb-2 text-brand text-left">
                       {v.h}
                     </h2>
@@ -765,7 +801,7 @@ export const BiblePage: React.FC = () => {
                         </span>
                       )}
                       <span className={isSpeaking ? 'text-[1.08em]' : ''}>
-                        {renderVerseWithFootnotes(v.t)}
+                        {renderVerseWithFootnotes(v.t, showFootnotes)}
                       </span>
                       {hasNote && (
                         <StickyNote className="w-3.5 h-3.5 text-brand shrink-0 mt-1" />
@@ -781,7 +817,7 @@ export const BiblePage: React.FC = () => {
           <div className="space-y-6">
             {paragraphs.map((para, pIdx) => (
               <div key={pIdx} className="space-y-3">
-                {para.heading && (
+                {showHeadings && para.heading && (
                   <h2 className={`text-xl sm:text-2xl font-bold ${pIdx === 0 ? 'pt-2' : 'pt-8 sm:pt-10'} pb-2 tracking-normal font-sans text-left`}>
                     {para.heading}
                   </h2>
@@ -817,7 +853,7 @@ export const BiblePage: React.FC = () => {
                         {showVerseNumbers && (
                           <sup className="verse-number">{v.v}</sup>
                         )}
-                        {renderVerseWithFootnotes(v.t)}
+                        {renderVerseWithFootnotes(v.t, showFootnotes)}
                         {hasNote && (
                           <span
                             title={t('该节包含灵修笔记')}
@@ -848,7 +884,7 @@ export const BiblePage: React.FC = () => {
 
               return (
                 <div key={`${v.v}-${idx}`} id={`verse-${v.v}`} className="space-y-1.5">
-                  {v.h && (
+                  {showHeadings && v.h && (
                     <h2 className="text-xl font-bold pt-3 pb-1">{v.h}</h2>
                   )}
                   <div
@@ -865,7 +901,7 @@ export const BiblePage: React.FC = () => {
                           {v.v}
                         </span>
                       )}
-                      {renderVerseWithFootnotes(v.t)}
+                      {renderVerseWithFootnotes(v.t, showFootnotes)}
                     </div>
                     {parallelMode && parallelV && (
                       <div className="text-sm theme-text-muted pt-1 border-t theme-border mt-1">
