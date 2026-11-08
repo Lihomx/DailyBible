@@ -730,7 +730,23 @@ export const BiblePage: React.FC = () => {
                         </span>
                       )}
                       <span className={isSpeaking ? 'text-[1.08em]' : ''}>
-                        {v.t.replace(/\u3000/g, ' ')}
+                        {v.t.includes('（有古卷在此有') ? (
+                          (() => {
+                            const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
+                            if (match) {
+                              return (
+                                <>
+                                  <span>{match[1].replace(/\u3000/g, ' ')}</span>
+                                  <span className="verse-footnote">{match[2]}</span>
+                                  <span>{match[3].replace(/\u3000/g, ' ')}</span>
+                                </>
+                              );
+                            }
+                            return <span>{v.t.replace(/\u3000/g, ' ')}</span>;
+                          })()
+                        ) : (
+                          <span>{v.t.replace(/\u3000/g, ' ')}</span>
+                        )}
                       </span>
                       {hasNote && (
                         <StickyNote className="w-3.5 h-3.5 text-brand shrink-0 mt-1" />
@@ -782,7 +798,23 @@ export const BiblePage: React.FC = () => {
                         {showVerseNumbers && (
                           <sup className="verse-number">{v.v}</sup>
                         )}
-                        <span>{v.t}</span>
+                        {v.t.includes('（有古卷在此有') ? (
+                          (() => {
+                            const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
+                            if (match) {
+                              return (
+                                <>
+                                  <span>{match[1]}</span>
+                                  <span className="verse-footnote">{match[2]}</span>
+                                  <span>{match[3]}</span>
+                                </>
+                              );
+                            }
+                            return <span>{v.t}</span>;
+                          })()
+                        ) : (
+                          <span>{v.t}</span>
+                        )}
                         {hasNote && (
                           <span
                             title={t('该节包含灵修笔记')}
@@ -831,7 +863,23 @@ export const BiblePage: React.FC = () => {
                           {v.v}
                         </span>
                       )}
-                      <span>{v.t}</span>
+                      {v.t.includes('（有古卷在此有') ? (
+                        (() => {
+                          const match = v.t.match(/^(.*?)(\s*（有古卷在此有[\s\S]*?）)(.*)$/);
+                          if (match) {
+                            return (
+                              <>
+                                <span>{match[1]}</span>
+                                <span className="verse-footnote">{match[2]}</span>
+                                <span>{match[3]}</span>
+                              </>
+                            );
+                          }
+                          return <span>{v.t}</span>;
+                        })()
+                      ) : (
+                        <span>{v.t}</span>
+                      )}
                     </div>
                     {parallelMode && parallelV && (
                       <div className="text-sm theme-text-muted pt-1 border-t theme-border mt-1">

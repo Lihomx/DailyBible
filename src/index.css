@@ -82,6 +82,14 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* wd.bible ancient manuscript footnote text styling */
+.verse-footnote {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  opacity: 0.88;
+  font-style: normal;
+}
+
 /* Highlight colors for verses */
 .hl-yellow {
   background-color: rgba(253, 224, 71, 0.45);
