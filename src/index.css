@@ -138,3 +138,43 @@ html[data-theme='dark'] .hl-pink {
 html[data-theme='dark'] .hl-purple {
   background-color: rgba(168, 85, 247, 0.35);
 }
+
+/* wd.bible exact golden ratio (61.8%) responsive reading column */
+.bible-reader-body {
+  width: 100%;
+  padding: 0 16px;
+  position: relative;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .bible-reader-body {
+    width: 85%;
+    max-width: none;
+    padding: 0 8px;
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1199px) {
+  .bible-reader-body {
+    width: 68%;
+    max-width: 900px;
+    padding: 0 12px;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .bible-reader-body {
+    width: 61.8%;
+    max-width: 1000px;
+    padding: 0 16px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .bible-reader-body {
+    width: 61.8%;
+    max-width: 1200px;
+    padding: 0 20px;
+  }
+}

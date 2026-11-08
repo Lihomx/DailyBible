@@ -396,13 +396,13 @@ export const BiblePage: React.FC = () => {
         </div>
       )}
 
-      {/* Centered Reader Layout Container (matches wd.bible desktop proportions) */}
-      <div className="relative w-full max-w-[880px] px-4 sm:px-10 flex flex-col">
+      {/* Centered Reader Layout Container (matches wd.bible golden ratio 61.8% proportions) */}
+      <div className="bible-reader-body flex flex-col">
         {/* Left / Right Floating Chapter Arrow Buttons (flanking the reader column) */}
         <button
           onClick={handlePrevChapter}
           title={t('上一章')}
-          className="hidden xl:flex absolute -left-12 top-60 z-20 w-8 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
+          className="hidden lg:flex absolute -left-11 lg:-left-14 top-60 z-20 w-8 lg:w-9 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -410,7 +410,7 @@ export const BiblePage: React.FC = () => {
         <button
           onClick={handleNextChapter}
           title={t('下一章')}
-          className="hidden xl:flex absolute -right-12 top-60 z-20 w-8 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
+          className="hidden lg:flex absolute -right-11 lg:-right-14 top-60 z-20 w-8 lg:w-9 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
