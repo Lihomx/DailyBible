@@ -743,15 +743,15 @@ export const BiblePage: React.FC = () => {
           </div>
         ) : readingLayout === 'paragraph' && !parallelMode ? (
           /* Paragraph Flow Mode (matches uploaded wd.bible screenshot 1) */
-          <div className="space-y-5">
+          <div className="space-y-6">
             {paragraphs.map((para, pIdx) => (
-              <div key={pIdx} className="space-y-3">
+              <div key={pIdx} className="space-y-2.5">
                 {para.heading && (
-                  <h2 className="text-xl sm:text-2xl font-bold pt-2 pb-1 tracking-wide">
+                  <h2 className="text-lg sm:text-xl font-bold pt-3 pb-1 tracking-normal font-sans">
                     {para.heading}
                   </h2>
                 )}
-                <p className="text-justify">
+                <p className="text-justify leading-[2.1] tracking-wide break-words selection:bg-brand/20">
                   {para.items.map((v, vIdx) => {
                     const hlKey = `${bookId}.${chapter}.${v.v}`;
                     const hl = highlights[hlKey];
@@ -767,7 +767,7 @@ export const BiblePage: React.FC = () => {
                         key={`${v.v}-${vIdx}`}
                         id={`verse-${v.v}`}
                         onClick={() => toggleSelectVerse(v.v)}
-                        className={`cursor-pointer transition rounded px-0.5 mr-1 ${
+                        className={`cursor-pointer transition rounded px-0.5 ${
                           hl ? `hl-${hl.color}` : ''
                         } ${
                           isSelected
@@ -794,6 +794,7 @@ export const BiblePage: React.FC = () => {
                         {inBatch && (
                           <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand ml-1 align-middle" />
                         )}
+                        {' '}
                       </span>
                     );
                   })}

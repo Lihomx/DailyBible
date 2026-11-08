@@ -429,12 +429,18 @@ async function loadAndPlayChapterAudio(
 
       let nextIdx = latest.currentIndex;
       if (cues.length > 0) {
-        const matchedCue = cues.find((c) => c.verse >= 1 && t >= c.start && t < c.end);
+        // Find exact cue matching current time
+        const matchedCue = cues.find((c) => t >= c.start && t < c.end);
         if (matchedCue) {
-          const vIdx = latest.verses.findIndex((v) => v.v === matchedCue.verse);
+          // If cue.verse === 0 (chapter title or intro music), map to verse 1 (first verse)
+          const targetVerseNum = matchedCue.verse >= 1 ? matchedCue.verse : 1;
+          const vIdx = latest.verses.findIndex((v) => v.v === targetVerseNum);
           if (vIdx >= 0) {
             nextIdx = vIdx;
           }
+        } else if (t < cues[0].start) {
+          // Before first cue starts -> verse 1
+          nextIdx = 0;
         }
       } else if (dur > 0 && latest.verses.length > 0) {
         const approxIdx = Math.min(

@@ -5,42 +5,45 @@
 :root,
 html[data-theme='light'] {
   --bg-page: #ffffff;
-  --bg-sidebar: #f6f6f6;
+  --bg-sidebar: #f8f9fa;
   --bg-card: #ffffff;
-  --bg-elevated: #f9fafb;
-  --border-subtle: #e5e7eb;
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --verse-num: #3b82f6;
+  --bg-elevated: #f4f5f7;
+  --border-subtle: #eaedf0;
+  --text-main: #22252a;
+  --text-muted: #737880;
+  --verse-num: #1890ff;
 }
 
-/* Can Read Bible (https://canread.bible/) warm light-yellow sepia theme */
+/* Warm sepia theme */
 html[data-theme='sepia'] {
-  --bg-page: #f5ebd7;
-  --bg-sidebar: #ece0c8;
-  --bg-card: #faf3e3;
-  --bg-elevated: #efe4cc;
-  --border-subtle: #dccbb0;
-  --text-main: #352a22;
-  --text-muted: #6e5d4f;
-  --verse-num: #2563eb;
+  --bg-page: #f6efe2;
+  --bg-sidebar: #ede2cf;
+  --bg-card: #f9f4ea;
+  --bg-elevated: #f0e6d5;
+  --border-subtle: #ded1bd;
+  --text-main: #2e261f;
+  --text-muted: #6e5e50;
+  --verse-num: #1890ff;
 }
 
 html[data-theme='dark'] {
-  --bg-page: #14161a;
-  --bg-sidebar: #1b1e24;
-  --bg-card: #1f232b;
-  --bg-elevated: #262b35;
-  --border-subtle: #2e3440;
-  --text-main: #e5e7eb;
-  --text-muted: #9ca3af;
-  --verse-num: #60a5fa;
+  --bg-page: #121316;
+  --bg-sidebar: #18191d;
+  --bg-card: #1c1e22;
+  --bg-elevated: #24272d;
+  --border-subtle: #2b2e35;
+  --text-main: #e2e4e8;
+  --text-muted: #8b929e;
+  --verse-num: #40a9ff;
 }
 
 body {
   background-color: var(--bg-page);
   color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Lantinghei SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -67,13 +70,16 @@ body {
   color: var(--text-muted);
 }
 
+/* wd.bible exact verse number style */
 .verse-number {
   color: var(--verse-num);
-  font-size: 0.75em;
+  font-size: 0.68em;
+  font-weight: 600;
   vertical-align: super;
-  margin-right: 0.25rem;
-  font-weight: 500;
+  margin-right: 0.2rem;
+  line-height: 0;
   user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Highlight colors for verses */
