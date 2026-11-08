@@ -24,6 +24,34 @@ function getVersionCode(script: 'simp' | 'trad'): 'cunps' | 'cunpt' {
   return script === 'trad' ? 'cunpt' : 'cunps';
 }
 
+export const BIBLE_CACHE_VERSION = 'v2';
+
+export function sanitizeBibleText(text: string, script: 'simp' | 'trad'): string {
+  if (script === 'simp') {
+    return text
+      .replace(/「/g, '“')
+      .replace(/」/g, '”')
+      .replace(/『/g, '‘')
+      .replace(/』/g, '’')
+      .replace(/:\s*“/g, '：“')
+      .replace(/:\s*‘/g, '：‘');
+  }
+  return text;
+}
+
+function sanitizeBookData(data: BookBibleData, script: 'simp' | 'trad'): BookBibleData {
+  if (script !== 'simp') return data;
+  return {
+    ...data,
+    chapters: data.chapters.map((ch) =>
+      ch.map((v) => ({
+        ...v,
+        t: sanitizeBibleText(v.t, script),
+      }))
+    ),
+  };
+}
+
 export async function loadBookBible(
   bookId: string,
   script: 'simp' | 'trad'
@@ -37,33 +65,34 @@ export async function loadBookBible(
 
   // If full bundle is already in memory, slice from it
   if (memoryBundleCache[ver] && memoryBundleCache[ver][bookId]) {
-    const bookData: BookBibleData = {
+    const bookData: BookBibleData = sanitizeBookData({
       id: bookId,
       name: getBookName(bookId, script),
       chapters: memoryBundleCache[ver][bookId],
-    };
+    }, script);
     memoryBookCache[cacheKey] = bookData;
     return bookData;
   }
 
   // Check IndexedDB book cache or full bundle cache
   try {
-    const cachedBundle = await idbGet<FullBibleBundle>(`bible_bundle_${ver}_v1`);
+    const cachedBundle = await idbGet<FullBibleBundle>(`bible_bundle_${ver}_${BIBLE_CACHE_VERSION}`);
     if (cachedBundle && cachedBundle[bookId]) {
       memoryBundleCache[ver] = cachedBundle;
-      const bookData: BookBibleData = {
+      const bookData: BookBibleData = sanitizeBookData({
         id: bookId,
         name: getBookName(bookId, script),
         chapters: cachedBundle[bookId],
-      };
+      }, script);
       memoryBookCache[cacheKey] = bookData;
       return bookData;
     }
 
-    const cachedBook = await idbGet<BookBibleData>(`bible_book_${cacheKey}_v1`);
+    const cachedBook = await idbGet<BookBibleData>(`bible_book_${cacheKey}_${BIBLE_CACHE_VERSION}`);
     if (cachedBook) {
-      memoryBookCache[cacheKey] = cachedBook;
-      return cachedBook;
+      const sanitized = sanitizeBookData(cachedBook, script);
+      memoryBookCache[cacheKey] = sanitized;
+      return sanitized;
     }
   } catch {
     // IndexedDB unavailable in non-browser or private mode
@@ -73,11 +102,12 @@ export async function loadBookBible(
   if (!res.ok) {
     throw new Error(`无法加载经文数据: ${bookId}`);
   }
-  const data = (await res.json()) as BookBibleData;
+  const rawData = (await res.json()) as BookBibleData;
+  const data = sanitizeBookData(rawData, script);
   memoryBookCache[cacheKey] = data;
 
   try {
-    await idbSet(`bible_book_${cacheKey}_v1`, data);
+    await idbSet(`bible_book_${cacheKey}_${BIBLE_CACHE_VERSION}`, data);
   } catch {
     // ignore
   }
@@ -111,7 +141,7 @@ export async function loadFullBibleBundle(script: 'simp' | 'trad'): Promise<Full
 
   const promise = (async () => {
     try {
-      const cached = await idbGet<FullBibleBundle>(`bible_bundle_${ver}_v1`);
+      const cached = await idbGet<FullBibleBundle>(`bible_bundle_${ver}_${BIBLE_CACHE_VERSION}`);
       if (cached && Object.keys(cached).length >= 66) {
         memoryBundleCache[ver] = cached;
         return cached;
@@ -128,7 +158,7 @@ export async function loadFullBibleBundle(script: 'simp' | 'trad'): Promise<Full
     memoryBundleCache[ver] = bundle;
 
     try {
-      await idbSet(`bible_bundle_${ver}_v1`, bundle);
+      await idbSet(`bible_bundle_${ver}_${BIBLE_CACHE_VERSION}`, bundle);
     } catch {
       // ignore IDB error
     }
@@ -156,7 +186,7 @@ export async function checkOfflineBibleStatus(): Promise<OfflineBibleStatus> {
   let cunptSize = 0;
 
   try {
-    const sBundle = await idbGet<FullBibleBundle>('bible_bundle_cunps_v1');
+    const sBundle = await idbGet<FullBibleBundle>(`bible_bundle_cunps_${BIBLE_CACHE_VERSION}`);
     if (sBundle && Object.keys(sBundle).length >= 66) {
       cunps = true;
       cunpsSize = 4.3 * 1024 * 1024; // ~4.3MB
@@ -166,7 +196,7 @@ export async function checkOfflineBibleStatus(): Promise<OfflineBibleStatus> {
   }
 
   try {
-    const tBundle = await idbGet<FullBibleBundle>('bible_bundle_cunpt_v1');
+    const tBundle = await idbGet<FullBibleBundle>(`bible_bundle_cunpt_${BIBLE_CACHE_VERSION}`);
     if (tBundle && Object.keys(tBundle).length >= 66) {
       cunpt = true;
       cunptSize = 4.4 * 1024 * 1024; // ~4.4MB
@@ -200,7 +230,7 @@ export async function downloadBibleBundleWithProgress(
 
   if (onProgress) onProgress(75);
 
-  await idbSet(`bible_bundle_${ver}_v1`, bundle);
+  await idbSet(`bible_bundle_${ver}_${BIBLE_CACHE_VERSION}`, bundle);
 
   if (onProgress) onProgress(100);
 }
@@ -215,12 +245,15 @@ export async function clearOfflineBibleBundle(script?: 'simp' | 'trad'): Promise
     delete memoryBundleCache['cunpt'];
     delete bundlePromiseCache['cunps'];
     delete bundlePromiseCache['cunpt'];
+    await idbDel(`bible_bundle_cunps_${BIBLE_CACHE_VERSION}`);
+    await idbDel(`bible_bundle_cunpt_${BIBLE_CACHE_VERSION}`);
     await idbDel('bible_bundle_cunps_v1');
     await idbDel('bible_bundle_cunpt_v1');
   } else {
     const ver = getVersionCode(script);
     delete memoryBundleCache[ver];
     delete bundlePromiseCache[ver];
+    await idbDel(`bible_bundle_${ver}_${BIBLE_CACHE_VERSION}`);
     await idbDel(`bible_bundle_${ver}_v1`);
   }
 }

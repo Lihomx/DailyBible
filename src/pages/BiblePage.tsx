@@ -34,9 +34,9 @@ const FONT_SIZE_CLASSES: Record<FontSizeScale, string> = {
 };
 
 const LINE_HEIGHT_CLASSES: Record<'normal' | 'relaxed' | 'loose', string> = {
-  normal: 'leading-relaxed',
-  relaxed: 'leading-[2.05]',
-  loose: 'leading-[2.4]',
+  normal: 'leading-[1.8]',
+  relaxed: 'leading-[2.0]',
+  loose: 'leading-[2.3]',
 };
 
 const HIGHLIGHT_COLORS: Array<{ color: HighlightColor; label: string; bg: string }> = [
@@ -396,11 +396,30 @@ export const BiblePage: React.FC = () => {
         </div>
       )}
 
-      {/* Top Reader Action Bar (exact match to wd.bible screenshot) */}
-      <div className="w-full max-w-4xl px-4 sm:px-8 pt-4 pb-4 flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Book/Chapter Selector + Version Selector */}
-        <div className="flex items-center gap-2.5">
-          <button
+      {/* Centered Reader Layout Container (matches wd.bible desktop proportions) */}
+      <div className="relative w-full max-w-[880px] px-4 sm:px-10 flex flex-col">
+        {/* Left / Right Floating Chapter Arrow Buttons (flanking the reader column) */}
+        <button
+          onClick={handlePrevChapter}
+          title={t('上一章')}
+          className="hidden xl:flex absolute -left-12 top-60 z-20 w-8 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={handleNextChapter}
+          title={t('下一章')}
+          className="hidden xl:flex absolute -right-12 top-60 z-20 w-8 h-10 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+
+        {/* Top Reader Action Bar (exact match to wd.bible screenshot) */}
+        <div className="w-full pt-4 pb-3 flex flex-wrap items-center justify-between gap-3 border-b theme-border/60 mb-2">
+          {/* Left: Book/Chapter Selector + Version Selector */}
+          <div className="flex items-center gap-2.5">
+            <button
             onClick={() => {
               setPickerBookId(bookId);
               setPickerTab(bookMeta.testament);
@@ -689,26 +708,9 @@ export const BiblePage: React.FC = () => {
         </div>
       )}
 
-      {/* Left / Right Floating Chapter Arrow Buttons (wd.bible style) */}
-      <button
-        onClick={handlePrevChapter}
-        title={t('上一章')}
-        className="hidden lg:flex fixed left-56 top-1/2 -translate-y-1/2 z-20 w-8 h-9 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
-
-      <button
-        onClick={handleNextChapter}
-        title={t('下一章')}
-        className="hidden lg:flex fixed right-8 top-1/2 -translate-y-1/2 z-20 w-8 h-9 rounded-md theme-elevated border theme-border items-center justify-center theme-text-muted hover:text-brand hover:border-brand transition shadow-sm"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
-
       {/* Main Scripture Reading Container */}
       <div
-        className={`w-full max-w-3xl px-4 sm:px-8 pb-36 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
+        className={`w-full pb-36 pt-2 ${FONT_SIZE_CLASSES[fontSize]} ${LINE_HEIGHT_CLASSES[lineHeight]}`}
       >
         {loading ? (
           <div className="py-20 text-center theme-text-muted text-sm">
@@ -729,7 +731,7 @@ export const BiblePage: React.FC = () => {
               return (
                 <div key={`${v.v}-${idx}`} id={`verse-${v.v}`} className="space-y-1.5">
                   {v.h && (
-                    <h2 className="text-lg sm:text-xl font-bold pt-3 pb-1 text-brand">
+                    <h2 className="text-xl sm:text-2xl font-bold pt-4 pb-2 text-brand text-left">
                       {v.h}
                     </h2>
                   )}
@@ -778,13 +780,13 @@ export const BiblePage: React.FC = () => {
           /* Paragraph Flow Mode (matches uploaded wd.bible screenshot 1) */
           <div className="space-y-6">
             {paragraphs.map((para, pIdx) => (
-              <div key={pIdx} className="space-y-2.5">
+              <div key={pIdx} className="space-y-3">
                 {para.heading && (
-                  <h2 className={`text-lg sm:text-xl font-bold ${pIdx === 0 ? 'pt-1' : 'pt-6 sm:pt-7'} pb-2.5 tracking-normal font-sans`}>
+                  <h2 className={`text-xl sm:text-2xl font-bold ${pIdx === 0 ? 'pt-2' : 'pt-8 sm:pt-10'} pb-2 tracking-normal font-sans text-left`}>
                     {para.heading}
                   </h2>
                 )}
-                <p className="text-justify break-words selection:bg-brand/20">
+                <p className="text-justify break-words leading-[1.95] selection:bg-brand/20">
                   {para.items.map((v, vIdx) => {
                     const hlKey = `${bookId}.${chapter}.${v.v}`;
                     const hl = highlights[hlKey];
@@ -800,7 +802,7 @@ export const BiblePage: React.FC = () => {
                         key={`${v.v}-${vIdx}`}
                         id={`verse-${v.v}`}
                         onClick={() => toggleSelectVerse(v.v)}
-                        className={`cursor-pointer transition rounded px-0.5 ${
+                        className={`cursor-pointer transition rounded ${
                           hl ? `hl-${hl.color}` : ''
                         } ${
                           isSelected
@@ -808,7 +810,7 @@ export const BiblePage: React.FC = () => {
                             : ''
                         } ${
                           isSpeaking
-                            ? 'ring-2 ring-brand bg-brand/15 rounded px-1'
+                            ? 'ring-2 ring-brand bg-brand/15 rounded px-0.5'
                             : ''
                         }`}
                       >
@@ -819,13 +821,13 @@ export const BiblePage: React.FC = () => {
                         {hasNote && (
                           <span
                             title={t('该节包含灵修笔记')}
-                            className="inline-flex items-center text-brand ml-1 align-middle"
+                            className="inline-flex items-center text-brand ml-0.5 align-middle"
                           >
                             <StickyNote className="w-3.5 h-3.5 inline" />
                           </span>
                         )}
                         {inBatch && (
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand ml-1 align-middle" />
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand ml-0.5 align-middle" />
                         )}
                       </span>
                     );
@@ -948,6 +950,7 @@ export const BiblePage: React.FC = () => {
           </button>
         </div>
       </div>
+    </div>
 
       {/* Selected Verses Floating Action Toolbar */}
       {selectedVerses.length > 0 && (
