@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
@@ -8,7 +8,6 @@ import {
   Maximize2,
   Minimize2,
   Columns,
-  Type,
   Highlighter,
   StickyNote,
   Copy,
@@ -20,7 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { BIBLE_BOOKS, BOOK_BY_ID, getBookName } from '../data/books';
-import { loadChapterVerses, VerseItem } from '../lib/bible';
+import { getCachedChapterVerses, loadChapterVerses, VerseItem } from '../lib/bible';
 import { useSettingsStore, FontSizeScale } from '../stores/settingsStore';
 import { useUserDataStore, HighlightColor } from '../stores/userDataStore';
 import { useTtsStore } from '../stores/ttsStore';
@@ -167,15 +166,48 @@ export const BiblePage: React.FC = () => {
     exitPlanLoopMode,
   } = useTtsStore();
 
-  const [verses, setVerses] = useState<VerseItem[]>([]);
-  const [parallelVerses, setParallelVerses] = useState<VerseItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerBookId, setPickerBookId] = useState(bookId);
   const [pickerTab, setPickerTab] = useState<'OT' | 'NT'>(bookMeta.testament);
   const [typoOpen, setTypoOpen] = useState(false);
   const [parallelMode, setParallelMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const targetDataKey = `${bookId}.${chapter}.${script}.${parallelMode ? 'p' : 's'}`;
+  const [chapterData, setChapterData] = useState<{
+    key: string;
+    main: VerseItem[];
+    parallel: VerseItem[];
+    loading: boolean;
+  }>(() => {
+    const cachedMain = getCachedChapterVerses(bookId, chapter, script);
+    const cachedParallel = parallelMode
+      ? getCachedChapterVerses(bookId, chapter, script === 'simp' ? 'trad' : 'simp')
+      : [];
+    if (cachedMain && cachedParallel) {
+      return { key: targetDataKey, main: cachedMain, parallel: cachedParallel, loading: false };
+    }
+    return { key: '', main: [], parallel: [], loading: true };
+  });
+
+  const syncMain =
+    chapterData.key === targetDataKey
+      ? null
+      : getCachedChapterVerses(bookId, chapter, script);
+  const syncParallel =
+    chapterData.key === targetDataKey
+      ? null
+      : parallelMode
+        ? getCachedChapterVerses(bookId, chapter, script === 'simp' ? 'trad' : 'simp')
+        : [];
+
+  const verses =
+    chapterData.key === targetDataKey ? chapterData.main : (syncMain || []);
+  const parallelVerses =
+    chapterData.key === targetDataKey ? chapterData.parallel : (syncParallel || []);
+  const loading =
+    chapterData.key === targetDataKey ? chapterData.loading : !(syncMain && syncParallel);
+  const isChapterReady = !loading && verses.length > 0;
 
   // Selected verses in current chapter (1-based verse numbers)
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
@@ -186,8 +218,24 @@ export const BiblePage: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setSelectedVerses([]);
+
+    const cachedMain = getCachedChapterVerses(bookId, chapter, script);
+    const cachedParallel = parallelMode
+      ? getCachedChapterVerses(bookId, chapter, script === 'simp' ? 'trad' : 'simp')
+      : [];
+
+    if (cachedMain && cachedParallel) {
+      setChapterData({
+        key: targetDataKey,
+        main: cachedMain,
+        parallel: cachedParallel,
+        loading: false,
+      });
+      return;
+    }
+
+    setChapterData((prev) => ({ ...prev, loading: true }));
 
     Promise.all([
       loadChapterVerses(bookId, chapter, script),
@@ -197,29 +245,28 @@ export const BiblePage: React.FC = () => {
     ])
       .then(([mainV, subV]) => {
         if (cancelled) return;
-        setVerses(mainV);
-        setParallelVerses(subV);
-        setLoading(false);
+        setChapterData({
+          key: targetDataKey,
+          main: mainV,
+          parallel: subV,
+          loading: false,
+        });
       })
       .catch(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setChapterData({
+            key: targetDataKey,
+            main: [],
+            parallel: [],
+            loading: false,
+          });
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [bookId, chapter, script, parallelMode]);
-
-  // Scroll to focused verse if ?v= is present
-  useEffect(() => {
-    if (!loading && focusVerse > 0) {
-      setSelectedVerses([focusVerse]);
-      const el = document.getElementById(`verse-${focusVerse}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }
-  }, [loading, focusVerse]);
+  }, [targetDataKey, bookId, chapter, script, parallelMode]);
 
   // Auto-scroll when TTS advances verse in this chapter
   const activeTtsVerseNum =
@@ -227,14 +274,62 @@ export const BiblePage: React.FC = () => {
       ? ttsVerses[ttsIndex]?.v
       : undefined;
 
+  const lastChapterRouteRef = useRef<string>('');
+  const lastScrolledTtsKeyRef = useRef<string>('');
+
+  // Scroll to focused verse if ?v= is present
   useEffect(() => {
-    if (activeTtsVerseNum) {
-      const el = document.getElementById(`verse-${activeTtsVerseNum}`);
+    if (isChapterReady && focusVerse > 0) {
+      setSelectedVerses([focusVerse]);
+      const el = document.getElementById(`verse-${focusVerse}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [activeTtsVerseNum]);
+  }, [isChapterReady, bookId, chapter, focusVerse]);
+
+  // Immediately reset scroll position and focus Verse 1 on chapter switch before paint
+  useLayoutEffect(() => {
+    if (!isChapterReady) return;
+    const chapterKey = `${bookId}.${chapter}`;
+    if (lastChapterRouteRef.current === chapterKey) return;
+
+    lastChapterRouteRef.current = chapterKey;
+    if (focusVerse > 0) return;
+
+    window.scrollTo({ top: 0, behavior: 'auto' });
+
+    if (activeTtsVerseNum) {
+      lastScrolledTtsKeyRef.current = `${chapterKey}.${activeTtsVerseNum}.${lyricFocusMode ? 'L' : 'N'}`;
+      if (activeTtsVerseNum > 1) {
+        const el = document.getElementById(`verse-${activeTtsVerseNum}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'auto', block: 'center' });
+        }
+      }
+    }
+  }, [isChapterReady, bookId, chapter, activeTtsVerseNum, focusVerse, lyricFocusMode]);
+
+  // Smoothly scroll to active verse as TTS advances within the chapter
+  useEffect(() => {
+    if (!activeTtsVerseNum) {
+      lastScrolledTtsKeyRef.current = '';
+      return;
+    }
+    if (!isChapterReady) return;
+
+    const ttsKey = `${bookId}.${chapter}.${activeTtsVerseNum}.${lyricFocusMode ? 'L' : 'N'}`;
+    if (lastScrolledTtsKeyRef.current === ttsKey) return;
+
+    lastScrolledTtsKeyRef.current = ttsKey;
+    const rafId = window.requestAnimationFrame(() => {
+      const el = document.getElementById(`verse-${activeTtsVerseNum}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isChapterReady, bookId, chapter, activeTtsVerseNum, lyricFocusMode, readingLayout]);
 
   // Close typography popover when clicking outside
   useEffect(() => {
@@ -252,7 +347,6 @@ export const BiblePage: React.FC = () => {
   const navigateChapter = (targetBookId: string, targetCh: number) => {
     setPickerOpen(false);
     navigate(`/bible/${targetBookId}.${targetCh}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePrevChapter = () => {
@@ -372,18 +466,6 @@ export const BiblePage: React.FC = () => {
     setCopiedNotice(true);
     setTimeout(() => setCopiedNotice(false), 1800);
   };
-
-  useEffect(() => {
-    if (!typoOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('#typo-popover') && !target.closest('#typo-trigger')) {
-        setTypoOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [typoOpen]);
 
   // Group verses into natural paragraphs when in 'paragraph' layout mode (wd.bible default)
   const paragraphs: Array<{ heading?: string; items: VerseItem[] }> = [];

@@ -271,8 +271,6 @@ async function advanceOnChapterEnded(
       );
     }
 
-    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
-
     set({
       planQueueIndex: nextQueueIdx,
       bookId: targetItem.bookId,
@@ -281,6 +279,8 @@ async function advanceOnChapterEnded(
       verses: nextVerses,
       currentIndex: 0,
     });
+
+    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
 
     loadAndPlayChapterAudio(
       get,
@@ -317,8 +317,6 @@ async function advanceOnChapterEnded(
   const nextVerses = await loadChapterVerses(nextBookId, nextChapter, script);
   if (session !== loadSessionId) return;
 
-  syncBrowserUrlToChapter(nextBookId, nextChapter);
-
   set({
     bookId: nextBookId,
     bookName: nextBookName,
@@ -326,6 +324,8 @@ async function advanceOnChapterEnded(
     verses: nextVerses,
     currentIndex: 0,
   });
+
+  syncBrowserUrlToChapter(nextBookId, nextChapter);
 
   loadAndPlayChapterAudio(get, set, 1);
 }
@@ -620,8 +620,6 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       );
     }
 
-    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
-
     set({
       planQueueIndex: queueIndex,
       bookId: targetItem.bookId,
@@ -630,6 +628,8 @@ export const useTtsStore = create<TtsState>((set, get) => ({
       verses,
       currentIndex: 0,
     });
+
+    syncBrowserUrlToChapter(targetItem.bookId, targetItem.chapter);
 
     loadAndPlayChapterAudio(
       get,
@@ -732,7 +732,6 @@ export const useTtsStore = create<TtsState>((set, get) => ({
     const script = useSettingsStore.getState().script;
     const name = getBookName(prevBookId, script);
     loadChapterVerses(prevBookId, prevCh, script).then((verses) => {
-      syncBrowserUrlToChapter(prevBookId, prevCh);
       set({
         bookId: prevBookId,
         bookName: name,
@@ -740,6 +739,7 @@ export const useTtsStore = create<TtsState>((set, get) => ({
         verses,
         currentIndex: 0,
       });
+      syncBrowserUrlToChapter(prevBookId, prevCh);
       loadAndPlayChapterAudio(get, set, 1);
     });
   },
@@ -766,7 +766,6 @@ export const useTtsStore = create<TtsState>((set, get) => ({
     const script = useSettingsStore.getState().script;
     const name = getBookName(nextBookId, script);
     loadChapterVerses(nextBookId, nextCh, script).then((verses) => {
-      syncBrowserUrlToChapter(nextBookId, nextCh);
       set({
         bookId: nextBookId,
         bookName: name,
@@ -774,6 +773,7 @@ export const useTtsStore = create<TtsState>((set, get) => ({
         verses,
         currentIndex: 0,
       });
+      syncBrowserUrlToChapter(nextBookId, nextCh);
       loadAndPlayChapterAudio(get, set, 1);
     });
   },

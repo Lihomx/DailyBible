@@ -52,10 +52,10 @@ function sanitizeBookData(data: BookBibleData, script: 'simp' | 'trad'): BookBib
   };
 }
 
-export async function loadBookBible(
+function getCachedBookBible(
   bookId: string,
   script: 'simp' | 'trad'
-): Promise<BookBibleData> {
+): BookBibleData | null {
   const ver = getVersionCode(script);
   const cacheKey = `${ver}:${bookId}`;
 
@@ -73,6 +73,36 @@ export async function loadBookBible(
     memoryBookCache[cacheKey] = bookData;
     return bookData;
   }
+
+  return null;
+}
+
+/**
+ * Synchronously return chapter verses if already loaded in memory cache.
+ */
+export function getCachedChapterVerses(
+  bookId: string,
+  chapter: number,
+  script: 'simp' | 'trad'
+): VerseItem[] | null {
+  const book = getCachedBookBible(bookId, script);
+  if (!book) return null;
+  const meta = BOOK_BY_ID[bookId];
+  const chIdx = Math.max(0, Math.min((meta?.chapters || book.chapters.length) - 1, chapter - 1));
+  return book.chapters[chIdx] || [];
+}
+
+export async function loadBookBible(
+  bookId: string,
+  script: 'simp' | 'trad'
+): Promise<BookBibleData> {
+  const cached = getCachedBookBible(bookId, script);
+  if (cached) {
+    return cached;
+  }
+
+  const ver = getVersionCode(script);
+  const cacheKey = `${ver}:${bookId}`;
 
   // Check IndexedDB book cache or full bundle cache
   try {
